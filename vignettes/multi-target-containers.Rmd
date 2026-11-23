@@ -1,0 +1,153 @@
+---
+title: "Multi-Target Containers for Quarto, Shiny, and Bayesian HPC Workflows"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Multi-Target Containers for Quarto, Shiny, and Bayesian HPC Workflows}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Why Multi-Target Container Compilation Matters
+
+Modern R projects span diverse deployment targets:
+
+- **Reproducible Quarto manuscripts** combining R, Python (`reticulate`/Jupyter), LaTeX PDF output, and spatial or graphics libraries (`sf`, `ragg`).
+- **Production Shiny applications** requiring non-root containers, HTTP health checks, background async workers (`mirai`/`promises`), and a reverse proxy.
+- **HPC Bayesian & compiled pipelines** (`cmdstanr`, `RTMB`, `rjags`, `Rcpp`, `rextendr`) where university clusters run **Apptainer / Singularity** rather than rootful Docker.
+
+`rcapsule` compiles all three targets from a single static project scan and verifies every emitted specification against its built-in security and reproducibility linter.
+
+## 1. Quarto Manuscript with LaTeX, Python, and Stan
+
+```{r quarto-example}
+library(rcapsule)
+
+q_dir <- tempfile("rcapsule_quarto_demo_")
+dir.create(q_dir)
+
+writeLines(
+  c(
+    "project:",
+    "  type: manuscript",
+    "format:",
+    "  pdf:",
+    "    pdf-engine: pdflatex"
+  ),
+  file.path(q_dir, "_quarto.yml")
+)
+
+writeLines(
+  c(
+    "---",
+    "title: 'Spatial Bayesian Modeling Manuscript'",
+    "format: pdf",
+    "---",
+    "",
+    "```{r}",
+    "library(sf)",
+    "library(ragg)",
+    "library(ggplot2)",
+    "```",
+    "",
+    "```{python}",
+    "import numpy as np",
+    "```",
+    "",
+    "```{stan}",
+    "parameters { real alpha; }",
+    "model { alpha ~ normal(0, 1); }",
+    "```"
+  ),
+  file.path(q_dir, "manuscript.qmd")
+)
+writeLines(c("numpy==1.26.4", "scipy==1.13.0"), file.path(q_dir, "requirements.txt"))
+
+sc_q <- scan_project(q_dir)
+sc_q
+
+df_q <- compile_dockerfile(sc_q, r_version = "4.4.1")
+lint_container_spec(df_q)
+cat(paste(df_q$lines[1:45], collapse = "\n"))
+```
+
+Notice how `compile_dockerfile()` automatically resolves `libgdal-dev`, `libgeos-dev`, `libproj-dev`, `libfreetype6-dev`, Quarto CLI, TinyTeX, a Python virtual environment (`--no-cache-dir`), and CmdStan in cache-optimal layers.
+
+## 2. Production Shiny + Async Worker + Reverse Proxy Stack
+
+When `scan_project()` detects a Shiny application (`app.R` or `ui.R`/`server.R`) alongside async workers (`worker.R`, `mirai`, `promises`), `compile_compose()` generates a hardened three-service stack (`app`, `worker`, and a pinned `caddy:2.8.4-alpine` reverse proxy) with `no-new-privileges`, health checks, and resource limits:
+
+```{r shiny-example}
+s_dir <- tempfile("rcapsule_shiny_demo_")
+dir.create(s_dir)
+
+writeLines(
+  c(
+    "library(shiny)",
+    "library(bslib)",
+    "library(mirai)",
+    "ui <- page_sidebar(title = 'Forecast Dashboard', sidebar = sidebar('Inputs'), 'Plot')",
+    "server <- function(input, output, session) {}",
+    "shinyApp(ui, server)"
+  ),
+  file.path(s_dir, "app.R")
+)
+writeLines("library(mirai)\ndaemons(2)", file.path(s_dir, "worker.R"))
+
+sc_s <- scan_project(s_dir)
+comp_s <- compile_compose(sc_s, port = 3838L, proxy_port = 8080L)
+lint_container_spec(comp_s)
+cat(comp_s$content)
+```
+
+## 3. Bayesian & Compiled HPC Recipe for Apptainer
+
+On university HPC clusters where Docker is unavailable, `compile_apptainer()` produces an Apptainer `.def` recipe complete with `Bootstrap: docker`, pinned base tags, `set -euo pipefail`, HPC bind directories (`/scratch`, `/work`, `/data`), non-root read permissions, `%runscript`, and `%test`:
+
+```{r hpc-example}
+h_dir <- tempfile("rcapsule_hpc_demo_")
+dir.create(file.path(h_dir, "src"), recursive = TRUE)
+
+writeLines(
+  c(
+    "library(cmdstanr)",
+    "library(RTMB)",
+    "library(Rcpp)",
+    "m <- cmdstanr::cmdstan_model('model.stan')"
+  ),
+  file.path(h_dir, "run.R")
+)
+writeLines("parameters { real mu; } model { mu ~ normal(0, 1); }", file.path(h_dir, "model.stan"))
+writeLines("#include <Rcpp.h>", file.path(h_dir, "src", "kernel.cpp"))
+
+sc_h <- scan_project(h_dir)
+def_h <- compile_apptainer(sc_h, r_version = "4.4.1")
+lint_container_spec(def_h)
+cat(def_h$content)
+```
+
+## 4. Static Auditing of Hand-Written Container Specs
+
+`lint_container_spec()` can also audit existing hand-written Dockerfiles, Compose files, or Apptainer definitions to catch reproducibility and security pitfalls before deployment:
+
+```{r lint-bad}
+problematic_dockerfile <- c(
+  "FROM rocker/r-ver:latest",
+  "ENV API_KEY=hardcoded_token_value",
+  "RUN apt-get update && apt-get install -y libgdal-dev",
+  "COPY . /app",
+  "RUN Rscript -e \"renv::restore()\""
+)
+
+lint_container_spec(problematic_dockerfile, type = "dockerfile")
+```
+
+```{r cleanup, include = FALSE}
+unlink(c(q_dir, s_dir, h_dir), recursive = TRUE)
+```

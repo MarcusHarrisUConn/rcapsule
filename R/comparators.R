@@ -1,0 +1,422 @@
+# Exact SHA-256 and structured numeric-tolerance artifact comparators
+
+# Compare two numeric vectors element-wise under abs_tol + rel_tol * max(|a|, |b|)
+compare_numeric_vectors <- function(a, b, abs_tol = 0, rel_tol = 0, label = "value") {
+  if (length(a) != length(b)) {
+    return(list(
+      ok = FALSE,
+      max_abs_diff = Inf,
+      max_rel_diff = Inf,
+      detail = paste0(label, ": length mismatch (", length(a), " vs ", length(b), ")")
+    ))
+  }
+  if (length(a) == 0L) {
+    return(list(ok = TRUE, max_abs_diff = 0, max_rel_diff = 0, detail = NULL))
+  }
+
+  a_num <- as.numeric(a)
+  b_num <- as.numeric(b)
+
+  # Check NA / NaN alignment separately
+  a_nan <- is.nan(a_num)
+  b_nan <- is.nan(b_num)
+  a_na <- is.na(a_num) & !a_nan
+  b_na <- is.na(b_num) & !b_nan
+
+  if (!identical(a_nan, b_nan)) {
+    idx <- which(a_nan != b_nan)[[1L]]
+    return(list(ok = FALSE, max_abs_diff = Inf, max_rel_diff = Inf,
+                detail = paste0(label, "[", idx, "]: NaN mismatch")))
+  }
+  if (!identical(a_na, b_na)) {
+    idx <- which(a_na != b_na)[[1L]]
+    return(list(ok = FALSE, max_abs_diff = Inf, max_rel_diff = Inf,
+                detail = paste0(label, "[", idx, "]: NA mismatch")))
+  }
+
+  # Check infinite values
+  a_inf <- is.infinite(a_num)
+  b_inf <- is.infinite(b_num)
+  if (!identical(a_inf, b_inf) || any(a_num[a_inf] != b_num[b_inf])) {
+    return(list(ok = FALSE, max_abs_diff = Inf, max_rel_diff = Inf,
+                detail = paste0(label, ": infinite value mismatch")))
+  }
+
+  fin <- is.finite(a_num) & is.finite(b_num)
+  if (!any(fin)) {
+    return(list(ok = TRUE, max_abs_diff = 0, max_rel_diff = 0, detail = NULL))
+  }
+
+  af <- a_num[fin]
+  bf <- b_num[fin]
+  abs_d <- abs(af - bf)
+  scale_d <- pmax(abs(af), abs(bf))
+  rel_d <- ifelse(scale_d == 0, 0, abs_d / scale_d)
+  thresh <- abs_tol + rel_tol * scale_d
+
+  bad <- abs_d > thresh
+  max_abs <- max(abs_d)
+  max_rel <- max(rel_d)
+
+  if (any(bad)) {
+    bad_idx <- which(fin)[which(bad)[[1L]]]
+    return(list(
+      ok = FALSE,
+      max_abs_diff = max_abs,
+      max_rel_diff = max_rel,
+      detail = paste0(
+        label, "[", bad_idx, "]: expected=", a_num[[bad_idx]],
+        ", actual=", b_num[[bad_idx]],
+        ", abs_diff=", signif(abs(a_num[[bad_idx]] - b_num[[bad_idx]]), 4L)
+      )
+    ))
+  }
+
+  list(ok = TRUE, max_abs_diff = max_abs, max_rel_diff = max_rel, detail = NULL)
+}
+
+# Compare two non-numeric atomic vectors with NA awareness
+compare_exact_atomic <- function(a, b, label = "value") {
+  if (length(a) != length(b)) {
+    return(list(ok = FALSE, detail = paste0(label, ": length mismatch (", length(a), " vs ", length(b), ")")))
+  }
+  a_c <- as.character(a)
+  b_c <- as.character(b)
+  same <- (is.na(a_c) & is.na(b_c)) | (!is.na(a_c) & !is.na(b_c) & a_c == b_c)
+  if (!all(same)) {
+    idx <- which(!same)[[1L]]
+    return(list(
+      ok = FALSE,
+      detail = paste0(label, "[", idx, "]: expected=", shQuote(a_c[[idx]]), ", actual=", shQuote(b_c[[idx]]))
+    ))
+  }
+  list(ok = TRUE, detail = NULL)
+}
+
+# Compare two data.frames column by column with numeric tolerance
+compare_data_frames <- function(a, b, abs_tol = 0, rel_tol = 0, label = "table") {
+  if (!identical(dim(a), dim(b))) {
+    return(list(
+      ok = FALSE,
+      max_abs_diff = Inf,
+      max_rel_diff = Inf,
+      detail = paste0(label, ": dimension mismatch (", nrow(a), "x", ncol(a), " vs ", nrow(b), "x", ncol(b), ")")
+    ))
+  }
+  if (!identical(names(a), names(b))) {
+    return(list(
+      ok = FALSE,
+      max_abs_diff = Inf,
+      max_rel_diff = Inf,
+      detail = paste0(label, ": column name mismatch")
+    ))
+  }
+
+  max_abs <- 0
+  max_rel <- 0
+
+  for (col in names(a)) {
+    ca <- a[[col]]
+    cb <- b[[col]]
+    col_lbl <- paste0(label, "$", col)
+    if (is.numeric(ca) && is.numeric(cb)) {
+      res <- compare_numeric_vectors(ca, cb, abs_tol = abs_tol, rel_tol = rel_tol, label = col_lbl)
+      if (!isTRUE(res$ok)) return(res)
+      max_abs <- max(max_abs, res$max_abs_diff)
+      max_rel <- max(max_rel, res$max_rel_diff)
+    } else if (is.factor(ca) || is.factor(cb) || is.character(ca) || is.character(cb) || is.logical(ca) || is.logical(cb)) {
+      res <- compare_exact_atomic(ca, cb, label = col_lbl)
+      if (!isTRUE(res$ok)) {
+        return(list(ok = FALSE, max_abs_diff = max_abs, max_rel_diff = max_rel, detail = res$detail))
+      }
+    } else {
+      res <- compare_r_objects(ca, cb, abs_tol = abs_tol, rel_tol = rel_tol, label = col_lbl)
+      if (!isTRUE(res$ok)) return(res)
+      max_abs <- max(max_abs, res$max_abs_diff)
+      max_rel <- max(max_rel, res$max_rel_diff)
+    }
+  }
+
+  list(ok = TRUE, max_abs_diff = max_abs, max_rel_diff = max_rel, detail = NULL)
+}
+
+# Recursive comparator for arbitrary R objects (RDS and parsed JSON trees)
+compare_r_objects <- function(a, b, abs_tol = 0, rel_tol = 0, ignore_attributes = FALSE, label = "root") {
+  # Fast exact digest check via digest::digest()
+  if (identical(digest::digest(a, algo = "sha256"), digest::digest(b, algo = "sha256"))) {
+    return(list(ok = TRUE, max_abs_diff = 0, max_rel_diff = 0, detail = NULL))
+  }
+
+  if (is.null(a) && is.null(b)) {
+    return(list(ok = TRUE, max_abs_diff = 0, max_rel_diff = 0, detail = NULL))
+  }
+  if (is.null(a) || is.null(b)) {
+    return(list(ok = FALSE, max_abs_diff = Inf, max_rel_diff = Inf,
+                detail = paste0(label, ": NULL vs non-NULL mismatch")))
+  }
+
+  # Data frames
+  if (is.data.frame(a) && is.data.frame(b)) {
+    return(compare_data_frames(a, b, abs_tol = abs_tol, rel_tol = rel_tol, label = label))
+  }
+
+  # Numeric vectors / matrices / arrays
+  if (is.numeric(a) && is.numeric(b)) {
+    if (!identical(dim(a), dim(b))) {
+      return(list(ok = FALSE, max_abs_diff = Inf, max_rel_diff = Inf,
+                  detail = paste0(label, ": array dimension mismatch")))
+    }
+    if (!isTRUE(ignore_attributes) && !identical(names(a), names(b))) {
+      return(list(ok = FALSE, max_abs_diff = Inf, max_rel_diff = Inf,
+                  detail = paste0(label, ": vector names mismatch")))
+    }
+    return(compare_numeric_vectors(a, b, abs_tol = abs_tol, rel_tol = rel_tol, label = label))
+  }
+
+  # Recursive lists
+  if (is.list(a) && is.list(b)) {
+    if (length(a) != length(b)) {
+      return(list(ok = FALSE, max_abs_diff = Inf, max_rel_diff = Inf,
+                  detail = paste0(label, ": list length mismatch (", length(a), " vs ", length(b), ")")))
+    }
+    na <- names(a)
+    nb <- names(b)
+    if (!is.null(na) || !is.null(nb)) {
+      if (!identical(sort(na %||% character()), sort(nb %||% character()))) {
+        return(list(ok = FALSE, max_abs_diff = Inf, max_rel_diff = Inf,
+                    detail = paste0(label, ": list key mismatch")))
+      }
+      keys <- na
+      max_abs <- 0
+      max_rel <- 0
+      for (k in keys) {
+        res <- compare_r_objects(a[[k]], b[[k]], abs_tol = abs_tol, rel_tol = rel_tol,
+                                 ignore_attributes = ignore_attributes, label = paste0(label, "$", k))
+        if (!isTRUE(res$ok)) return(res)
+        max_abs <- max(max_abs, res$max_abs_diff)
+        max_rel <- max(max_rel, res$max_rel_diff)
+      }
+      return(list(ok = TRUE, max_abs_diff = max_abs, max_rel_diff = max_rel, detail = NULL))
+    } else {
+      max_abs <- 0
+      max_rel <- 0
+      for (i in seq_along(a)) {
+        res <- compare_r_objects(a[[i]], b[[i]], abs_tol = abs_tol, rel_tol = rel_tol,
+                                 ignore_attributes = ignore_attributes, label = paste0(label, "[[", i, "]]"))
+        if (!isTRUE(res$ok)) return(res)
+        max_abs <- max(max_abs, res$max_abs_diff)
+        max_rel <- max(max_rel, res$max_rel_diff)
+      }
+      return(list(ok = TRUE, max_abs_diff = max_abs, max_rel_diff = max_rel, detail = NULL))
+    }
+  }
+
+  # Atomic non-numeric types (character, logical, factor)
+  if (is.atomic(a) && is.atomic(b) && identical(typeof(a), typeof(b))) {
+    res <- compare_exact_atomic(a, b, label = label)
+    return(list(
+      ok = res$ok,
+      max_abs_diff = if (res$ok) 0 else Inf,
+      max_rel_diff = if (res$ok) 0 else Inf,
+      detail = res$detail
+    ))
+  }
+
+  list(
+    ok = FALSE,
+    max_abs_diff = Inf,
+    max_rel_diff = Inf,
+    detail = paste0(label, ": object type/class mismatch (", paste(class(a), collapse = "/"), " vs ", paste(class(b), collapse = "/"), ")")
+  )
+}
+
+#' Compare Two Output Artifacts with Exact SHA-256 and Numeric Tolerance
+#'
+#' Fast-paths exact bit-for-bit verification via SHA-256. When digests differ
+#' and numeric tolerances (`abs_tol > 0` or `rel_tol > 0`) are permitted,
+#' parses `csv`, `tsv`, `json`, or `rds` artifacts and verifies that every
+#' numeric element satisfies `abs(a - b) <= abs_tol + rel_tol * max(|a|, |b|)`
+#' while all non-numeric keys, columns, and labels match identically.
+#'
+#' @param expected_path Path to the expected reference artifact (may be `NULL`
+#'   if `expected_sha256` and/or `expected_raw` is supplied).
+#' @param actual_path Path to the freshly reproduced artifact.
+#' @param expected_sha256 Optional recorded SHA-256 hex digest of the expected
+#'   artifact.
+#' @param abs_tol Non-negative absolute numeric tolerance (default `0`).
+#' @param rel_tol Non-negative relative numeric tolerance (default `0`).
+#' @param format Artifact format: `"auto"` (default), `"csv"`, `"tsv"`,
+#'   `"json"`, `"rds"`, `"text"`, or `"binary"`.
+#' @param ignore_attributes Logical; if `TRUE`, ignores vector name attributes
+#'   during RDS comparison.
+#' @param expected_raw Optional raw vector of the expected artifact bytes (e.g.,
+#'   decoded from an embedded manifest snapshot).
+#'
+#' @return A list with fields `status` (`"exact_match"`, `"within_tolerance"`,
+#'   `"mismatch"`, or `"missing"`), `passed` (logical), `expected_sha256`,
+#'   `actual_sha256`, `max_abs_diff`, `max_rel_diff`, `abs_tol`, `rel_tol`, and
+#'   `details`.
+#' @export
+#' @examples
+#' f1 <- tempfile(fileext = ".csv")
+#' f2 <- tempfile(fileext = ".csv")
+#' write.csv(data.frame(k = c("a", "b"), est = c(1.0000, 2.0000)), f1, row.names = FALSE)
+#' write.csv(data.frame(k = c("a", "b"), est = c(1.0002, 1.9999)), f2, row.names = FALSE)
+#' compare_artifacts(f1, f2, abs_tol = 1e-3)
+#' unlink(c(f1, f2))
+compare_artifacts <- function(expected_path = NULL,
+                              actual_path,
+                              expected_sha256 = NULL,
+                              abs_tol = 0,
+                              rel_tol = 0,
+                              format = "auto",
+                              ignore_attributes = FALSE,
+                              expected_raw = NULL) {
+  abs_tol <- as.numeric(abs_tol %||% 0)
+  rel_tol <- as.numeric(rel_tol %||% 0)
+
+  if (is.null(expected_sha256) && !is.null(expected_path) && fs::file_exists(expected_path)) {
+    expected_sha256 <- sha256_file(expected_path)
+  }
+
+  if (is.null(actual_path) || !fs::file_exists(actual_path)) {
+    return(list(
+      status = "missing",
+      passed = FALSE,
+      expected_sha256 = expected_sha256 %||% NA_character_,
+      actual_sha256 = NA_character_,
+      max_abs_diff = NA_real_,
+      max_rel_diff = NA_real_,
+      abs_tol = abs_tol,
+      rel_tol = rel_tol,
+      details = "Expected output artifact was not produced."
+    ))
+  }
+
+  actual_sha256 <- sha256_file(actual_path)
+
+  # Fast path: exact SHA-256 match
+  if (!is.null(expected_sha256) && identical(actual_sha256, expected_sha256)) {
+    return(list(
+      status = "exact_match",
+      passed = TRUE,
+      expected_sha256 = expected_sha256,
+      actual_sha256 = actual_sha256,
+      max_abs_diff = 0,
+      max_rel_diff = 0,
+      abs_tol = abs_tol,
+      rel_tol = rel_tol,
+      details = "Exact SHA-256 bit-for-bit match."
+    ))
+  }
+
+  # Zero tolerance requested -> fail on digest mismatch
+  if (abs_tol <= 0 && rel_tol <= 0) {
+    return(list(
+      status = "mismatch",
+      passed = FALSE,
+      expected_sha256 = expected_sha256 %||% NA_character_,
+      actual_sha256 = actual_sha256,
+      max_abs_diff = NA_real_,
+      max_rel_diff = NA_real_,
+      abs_tol = abs_tol,
+      rel_tol = rel_tol,
+      details = "SHA-256 digest mismatch (exact match required)."
+    ))
+  }
+
+  # Resolve reference file for numeric tolerance comparison
+  ref_file <- NULL
+  temp_ref <- NULL
+  if (!is.null(expected_path) && fs::file_exists(expected_path)) {
+    ref_file <- expected_path
+  } else if (!is.null(expected_raw) && is.raw(expected_raw)) {
+    ext <- tools::file_ext(actual_path)
+    temp_ref <- tempfile("rcapsule_ref_", fileext = if (nzchar(ext)) paste0(".", ext) else "")
+    writeBin(expected_raw, temp_ref)
+    on.exit(unlink(temp_ref), add = TRUE)
+    ref_file <- temp_ref
+  }
+
+  if (is.null(ref_file)) {
+    return(list(
+      status = "mismatch",
+      passed = FALSE,
+      expected_sha256 = expected_sha256 %||% NA_character_,
+      actual_sha256 = actual_sha256,
+      max_abs_diff = NA_real_,
+      max_rel_diff = NA_real_,
+      abs_tol = abs_tol,
+      rel_tol = rel_tol,
+      details = "SHA-256 mismatch and no reference artifact or snapshot available for tolerance comparison."
+    ))
+  }
+
+  fmt <- if (identical(format, "auto")) detect_artifact_format(actual_path) else tolower(format)
+
+  comp <- tryCatch(
+    {
+      if (fmt == "csv") {
+        da <- utils::read.csv(ref_file, stringsAsFactors = FALSE, check.names = FALSE)
+        db <- utils::read.csv(actual_path, stringsAsFactors = FALSE, check.names = FALSE)
+        compare_data_frames(da, db, abs_tol = abs_tol, rel_tol = rel_tol, label = basename(actual_path))
+      } else if (fmt == "tsv") {
+        da <- utils::read.delim(ref_file, stringsAsFactors = FALSE, check.names = FALSE)
+        db <- utils::read.delim(actual_path, stringsAsFactors = FALSE, check.names = FALSE)
+        compare_data_frames(da, db, abs_tol = abs_tol, rel_tol = rel_tol, label = basename(actual_path))
+      } else if (fmt == "json") {
+        ja <- jsonlite::fromJSON(ref_file, simplifyVector = TRUE)
+        jb <- jsonlite::fromJSON(actual_path, simplifyVector = TRUE)
+        compare_r_objects(ja, jb, abs_tol = abs_tol, rel_tol = rel_tol, ignore_attributes = TRUE, label = basename(actual_path))
+      } else if (fmt == "rds") {
+        ra <- readRDS(ref_file)
+        rb <- readRDS(actual_path)
+        compare_r_objects(ra, rb, abs_tol = abs_tol, rel_tol = rel_tol, ignore_attributes = ignore_attributes, label = basename(actual_path))
+      } else {
+        list(
+          ok = FALSE,
+          max_abs_diff = NA_real_,
+          max_rel_diff = NA_real_,
+          detail = paste0("SHA-256 mismatch for non-numeric format '", fmt, "' (exact match required).")
+        )
+      }
+    },
+    error = function(e) {
+      list(
+        ok = FALSE,
+        max_abs_diff = NA_real_,
+        max_rel_diff = NA_real_,
+        detail = paste0("Failed to parse artifact as ", fmt, ": ", conditionMessage(e))
+      )
+    }
+  )
+
+  if (isTRUE(comp$ok)) {
+    list(
+      status = "within_tolerance",
+      passed = TRUE,
+      expected_sha256 = expected_sha256 %||% NA_character_,
+      actual_sha256 = actual_sha256,
+      max_abs_diff = comp$max_abs_diff,
+      max_rel_diff = comp$max_rel_diff,
+      abs_tol = abs_tol,
+      rel_tol = rel_tol,
+      details = paste0(
+        "Verified within tolerance (max_abs_diff=", signif(comp$max_abs_diff, 4L),
+        ", max_rel_diff=", signif(comp$max_rel_diff, 4L), ")."
+      )
+    )
+  } else {
+    list(
+      status = "mismatch",
+      passed = FALSE,
+      expected_sha256 = expected_sha256 %||% NA_character_,
+      actual_sha256 = actual_sha256,
+      max_abs_diff = comp$max_abs_diff %||% NA_real_,
+      max_rel_diff = comp$max_rel_diff %||% NA_real_,
+      abs_tol = abs_tol,
+      rel_tol = rel_tol,
+      details = comp$detail %||% "Artifact values exceeded numeric tolerance."
+    )
+  }
+}

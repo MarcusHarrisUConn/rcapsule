@@ -1,0 +1,48 @@
+Package: rcapsule
+Title: Reproducibility Capsules and Multi-Target Containerization for R
+Version: 0.1.0
+Authors@R:
+    person("Marcus", "Harris", , "marcus.harris.uconn@gmail.com", role = c("aut", "cre", "cph"))
+Description: Compiles R analysis projects, Quarto manuscripts, R Markdown
+    reports, R packages, and Shiny applications into lean, layer-cached
+    Dockerfiles, multi-service 'docker-compose.yml' stacks, and HPC-ready
+    Apptainer definitions. Resolves full-stack R package, OS system library,
+    and scientific toolchain dependencies ('CmdStan', 'TMB'/'RTMB', 'JAGS',
+    'C++', 'Rust', 'Python'/'reticulate', 'Quarto', and 'LaTeX'), records
+    cryptographically verifiable provenance manifests ('capsule.json') with
+    SHA-256 artifact hashes and optional HMAC-SHA256 signatures, and executes
+    isolated reproducibility audits with exact and numeric-tolerance
+    comparators to produce journal-ready verification certificates.
+License: MIT + file LICENSE
+URL: https://github.com/MarcusHarrisUConn/rcapsule
+BugReports: https://github.com/MarcusHarrisUConn/rcapsule/issues
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Depends:
+    R (>= 4.1.0)
+Imports:
+    callr,
+    cli,
+    desc,
+    digest,
+    fs,
+    htmltools,
+    jsonlite,
+    openssl,
+    processx,
+    rlang,
+    tibble,
+    tools,
+    utils,
+    yaml
+Suggests:
+    knitr,
+    quarto,
+    renv,
+    rmarkdown,
+    shiny,
+    testthat (>= 3.0.0),
+    withr
+VignetteBuilder: knitr
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.1.0
