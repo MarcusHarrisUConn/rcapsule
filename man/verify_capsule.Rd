@@ -17,7 +17,9 @@ verify_capsule(
   docker_image = NULL,
   docker_tag = NULL,
   keep_sandbox = FALSE,
-  reference_dir = NULL
+  reference_dir = NULL,
+  strict_outputs = FALSE,
+  scrub_secrets = TRUE
 )
 }
 \arguments{
@@ -55,14 +57,25 @@ directory on disk and records its path for debugging. Defaults to \code{FALSE}.}
 \item{reference_dir}{Optional directory containing verified baseline output
 files for numeric-tolerance comparison (defaults to \code{path}; only used if
 a baseline file's SHA-256 matches the manifest).}
+
+\item{strict_outputs}{Logical; if \code{TRUE}, fails verification when the
+pipeline produces unexpected extra artifacts not declared in
+\code{manifest$artifacts$outputs}. Defaults to \code{FALSE} (extra artifacts are
+still detected and reported in \code{extra_artifacts}).}
+
+\item{scrub_secrets}{Logical; if \code{TRUE} (default), strips ambient credential
+and token environment variables (\verb{AWS_*}, \code{GITHUB_TOKEN}, \code{GH_TOKEN},
+\code{OPENAI_API_KEY}, \code{ANTHROPIC_API_KEY}, \verb{*_SECRET*}, \verb{*_TOKEN*}, etc.)
+before launching the isolated sandbox subprocess.}
 }
 \value{
 An S3 object of class \code{rcapsule_verification} containing \code{status}
 (\code{"verified_exact"}, \code{"verified_within_tolerance"}, or \code{"failed"}),
 \code{passed} (logical), \code{runner}, \code{verified_at}, \code{duration_sec},
 \code{exit_status}, \code{manifest_integrity}, \code{input_checks}, \code{script_checks},
-\code{output_checks}, \code{failure_reasons}, \code{rng}, \code{environment}, \code{stdout},
-\code{stderr}, \code{sandbox_dir}, and \code{manifest}.
+\code{output_checks}, \code{extra_artifacts}, \code{scrubbed_env_vars},
+\code{failure_reasons}, \code{rng}, \code{environment}, \code{stdout}, \code{stderr},
+\code{sandbox_dir}, and \code{manifest}.
 }
 \description{
 Audits a recorded \code{capsule.json} manifest by:

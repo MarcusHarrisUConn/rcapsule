@@ -24,7 +24,22 @@ is_excluded_rel_path <- function(rel, excludes) {
   out
 }
 
-# Parse R code text (AST with regex fallback) to extract packages and tool signals
+# Helper to extract character or symbol package names from a call argument (handling c(...))
+extract_pkg_tokens_from_expr <- function(arg, allow_symbols = TRUE) {
+  if (is.character(arg)) {
+    return(arg[!is.na(arg) & nzchar(arg)])
+  }
+  if (allow_symbols && is.symbol(arg)) {
+    return(as.character(arg))
+  }
+  if (is.call(arg) && identical(as.character(arg[[1L]]), "c")) {
+    vals <- unlist(lapply(as.list(arg)[-1L], extract_pkg_tokens_from_expr, allow_symbols = allow_symbols))
+    return(as.character(vals))
+  }
+  character()
+}
+
+# Parse R code text (AST with string-stripped regex fallback) to extract packages and tool signals
 parse_r_code_signals <- function(code_text, source_label = "<inline>") {
   pkgs <- character()
   signals <- list(
@@ -104,6 +119,59 @@ parse_r_code_signals <- function(code_text, source_label = "<inline>") {
         }
       }
 
+      # pacman::p_load() / pacman::p_load_gh()
+      if (!is.null(fn_name) && fn_name %in% c("p_load", "p_load_gh") &&
+        (is.null(fn_ns) || identical(fn_ns, "pacman")) && length(e) >= 2L) {
+        args <- as.list(e)[-1L]
+        arg_names <- names(args) %||% rep("", length(args))
+        co_idx <- which(arg_names == "character.only")
+        char_only <- length(co_idx) == 1L && isTRUE(args[[co_idx]])
+        for (k in seq_along(args)) {
+          nm <- arg_names[[k]]
+          if (identical(nm, "char")) {
+            toks <- extract_pkg_tokens_from_expr(args[[k]], allow_symbols = FALSE)
+          } else if (!nzchar(nm)) {
+            toks <- extract_pkg_tokens_from_expr(args[[k]], allow_symbols = !char_only)
+          } else {
+            next
+          }
+          if (identical(fn_name, "p_load_gh")) {
+            # Convert "owner/repo@ref" -> "repo"
+            toks <- sub("[@#].*$", "", toks)
+            toks <- sub("^.*/", "", toks)
+          }
+          pkgs <<- c(pkgs, toks)
+        }
+      }
+
+      # xfun::pkg_attach() / pkg_attach2() / pkg_load2()
+      if (!is.null(fn_name) && fn_name %in% c("pkg_attach", "pkg_attach2", "pkg_load2") &&
+        (is.null(fn_ns) || identical(fn_ns, "xfun")) && length(e) >= 2L) {
+        args <- as.list(e)[-1L]
+        arg_names <- names(args) %||% rep("", length(args))
+        for (k in seq_along(args)) {
+          if (!nzchar(arg_names[[k]])) {
+            pkgs <<- c(pkgs, extract_pkg_tokens_from_expr(args[[k]], allow_symbols = FALSE))
+          }
+        }
+      }
+
+      # box::use(pkg, pkg[fn1, fn2], alias = pkg[fn], ./local_mod)
+      if (!is.null(fn_name) && identical(fn_name, "use") && identical(fn_ns, "box") && length(e) >= 2L) {
+        args <- as.list(e)[-1L]
+        for (arg in args) {
+          if (is.symbol(arg)) {
+            pkgs <<- c(pkgs, as.character(arg))
+          } else if (is.call(arg) && identical(as.character(arg[[1L]]), "[") && length(arg) >= 2L) {
+            target <- arg[[2L]]
+            # Plain symbol means installed package (e.g. dplyr[filter]); calls like ./mod are local modules
+            if (is.symbol(target)) {
+              pkgs <<- c(pkgs, as.character(target))
+            }
+          }
+        }
+      }
+
       # set.seed()
       if (!is.null(fn_name) && identical(fn_name, "set.seed") && length(e) >= 2L) {
         seed_arg <- e[[2L]]
@@ -170,27 +238,30 @@ parse_r_code_signals <- function(code_text, source_label = "<inline>") {
   if (parse_ok && !is.null(exprs)) {
     walk_expr(exprs)
   } else {
-    # Comment-stripped regex fallback for unparseable R fragments
-    lines <- sub("#.*$", "", strsplit(paste(code_text, collapse = "\n"), "\n", fixed = TRUE)[[1L]])
-    clean <- paste(lines, collapse = "\n")
+    # Comment- and string-aware fallback for syntactically incomplete R fragments
+    raw_lines <- strsplit(paste(code_text, collapse = "\n"), "\n", fixed = TRUE)[[1L]]
+    no_comments <- sub("#.*$", "", raw_lines)
+    clean_full <- paste(no_comments, collapse = "\n")
+    # Strip quoted strings before scanning for bare pkg::fn to eliminate string-literal false positives
+    clean_no_strings <- gsub("\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*'", "\"\"", clean_full, perl = TRUE)
 
-    extract_group1 <- function(pattern) {
-      m <- gregexpr(pattern, clean, perl = TRUE)
-      hits <- regmatches(clean, m)[[1L]]
+    extract_group1 <- function(text, pattern) {
+      m <- gregexpr(pattern, text, perl = TRUE)
+      hits <- regmatches(text, m)[[1L]]
       if (length(hits) == 0L) return(character())
       sub(pattern, "\\1", hits, perl = TRUE)
     }
 
     pkgs <- c(
       pkgs,
-      extract_group1("(?:library|require)\\s*\\(\\s*['\"]?([A-Za-z][A-Za-z0-9.]+)['\"]?"),
-      extract_group1("(?:loadNamespace|requireNamespace)\\s*\\(\\s*['\"]([A-Za-z][A-Za-z0-9.]+)['\"]"),
-      extract_group1("\\b([A-Za-z][A-Za-z0-9.]+):::?[A-Za-z._]")
+      extract_group1(clean_full, "(?:library|require)\\s*\\(\\s*['\"]?([A-Za-z][A-Za-z0-9.]+)['\"]?"),
+      extract_group1(clean_full, "(?:loadNamespace|requireNamespace)\\s*\\(\\s*['\"]([A-Za-z][A-Za-z0-9.]+)['\"]"),
+      extract_group1(clean_no_strings, "\\b([A-Za-z][A-Za-z0-9.]+):::?[A-Za-z._]")
     )
   }
 
-  # Clean valid R package names
-  pkgs <- unique(pkgs[grepl("^[A-Za-z][A-Za-z0-9.]*[A-Za-z0-9]$|^[A-Za-z]$", pkgs)])
+  # Strictly keep valid CRAN-compliant R package names
+  pkgs <- unique(pkgs[is_valid_r_pkg_name(pkgs)])
   signals$python_packages <- unique(signals$python_packages[nzchar(signals$python_packages)])
   signals$seeds <- unique(signals$seeds)
 
@@ -237,13 +308,13 @@ parse_notebook_file <- function(file_path, rel) {
   cpp_chunks <- character()
   inline_r <- character()
 
-  # 1. YAML frontmatter
+  # 1. YAML frontmatter (eval.expr = FALSE for security)
   n <- length(lines)
   start_idx <- which(grepl("^---\\s*$", lines))
   if (length(start_idx) >= 2L && start_idx[[1L]] == 1L) {
     fm_lines <- lines[(start_idx[[1L]] + 1L):(start_idx[[2L]] - 1L)]
     yaml_meta <- tryCatch(
-      yaml::yaml.load(paste(fm_lines, collapse = "\n")),
+      safe_yaml_load(paste(fm_lines, collapse = "\n")),
       error = function(e) list()
     )
     if (!is.list(yaml_meta)) yaml_meta <- list()
@@ -252,8 +323,9 @@ parse_notebook_file <- function(file_path, rel) {
     body_start <- 1L
   }
 
-  # 2. Fenced code chunks
+  # 2. Fenced code chunks (also skip plain non-executable fenced blocks from inline-R prose scan)
   in_chunk <- FALSE
+  in_plain_fence <- FALSE
   chunk_engine <- NULL
   chunk_fence_len <- 3L
   chunk_buf <- character()
@@ -262,7 +334,7 @@ parse_notebook_file <- function(file_path, rel) {
   if (body_start <= n) {
     for (i in seq(body_start, n)) {
       ln <- lines[[i]]
-      if (!in_chunk) {
+      if (!in_chunk && !in_plain_fence) {
         m <- regexec("^\\s*(`{3,})\\s*\\{\\s*([A-Za-z0-9_+.-]+)(.*)\\}\\s*$", ln)
         parts <- regmatches(ln, m)[[1L]]
         if (length(parts) >= 3L) {
@@ -272,7 +344,20 @@ parse_notebook_file <- function(file_path, rel) {
           chunk_buf <- character()
           next
         }
+        # Detect plain fenced block (e.g., ```markdown or ```) so prose inline-R ignores it
+        pm <- regexec("^\\s*(`{3,})([A-Za-z0-9_.\\-]*\\s*)$", ln)
+        pparts <- regmatches(ln, pm)[[1L]]
+        if (length(pparts) >= 2L && nchar(pparts[[2L]]) >= 3L) {
+          in_plain_fence <- TRUE
+          chunk_fence_len <- nchar(pparts[[2L]])
+          next
+        }
         prose_lines <- c(prose_lines, ln)
+      } else if (in_plain_fence) {
+        close_pat <- paste0("^\\s*`{", chunk_fence_len, ",}\\s*$")
+        if (grepl(close_pat, ln)) {
+          in_plain_fence <- FALSE
+        }
       } else {
         close_pat <- paste0("^\\s*`{", chunk_fence_len, ",}\\s*$")
         if (grepl(close_pat, ln)) {
@@ -297,10 +382,11 @@ parse_notebook_file <- function(file_path, rel) {
     }
   }
 
-  # 3. Inline R expressions `r ...`
+  # 3. Inline R expressions `r ...` (ignore double-backtick verbatim spans like `` `r ...` ``)
   prose_text <- paste(prose_lines, collapse = "\n")
-  im <- gregexpr("`r\\s+([^`]+)`", prose_text, perl = TRUE)
-  hits <- regmatches(prose_text, im)[[1L]]
+  prose_clean <- gsub("(?<!`)``(?!`)(?:(?!``).)+``(?!`)", "", prose_text, perl = TRUE)
+  im <- gregexpr("(?<!`)`r\\s+([^`]+)`(?!`)", prose_clean, perl = TRUE)
+  hits <- regmatches(prose_clean, im)[[1L]]
   if (length(hits) > 0L) {
     inline_r <- sub("^`r\\s+([^`]+)`$", "\\1", hits, perl = TRUE)
   }
@@ -380,7 +466,7 @@ parse_requirements_txt <- function(path) {
   unique(lines)
 }
 
-# Parse renv.lock safely
+# Parse renv.lock safely, preserving non-CRAN remote provenance (GitHub/Bioconductor/GitLab/URL)
 parse_renv_lock <- function(path) {
   lock <- tryCatch(
     jsonlite::read_json(path, simplifyVector = FALSE),
@@ -390,15 +476,51 @@ parse_renv_lock <- function(path) {
     return(NULL)
   }
   r_ver <- lock$R$Version %||% NULL
+  if (!is.null(r_ver)) {
+    r_ver <- validate_version_string(as.character(r_ver), arg = "renv.lock R$Version")
+  }
   repos <- lock$R$Repositories %||% list()
   pkgs <- lock$Packages %||% list()
 
   pkg_rows <- lapply(names(pkgs), function(nm) {
     entry <- pkgs[[nm]]
+    pkg_name <- as.character(entry$Package %||% nm)
+    validate_r_package_names(pkg_name, arg = "renv.lock Package")
+
+    raw_src <- as.character(entry$Source %||% "renv.lock")
+    remote_type <- entry$RemoteType %||% NULL
+    remote_user <- entry$RemoteUsername %||% NULL
+    remote_repo <- entry$RemoteRepo %||% NULL
+    remote_ref <- entry$RemoteRef %||% NULL
+    repo_name <- entry$Repository %||% NULL
+
+    is_non_cran <- FALSE
+    src_label <- raw_src
+    if (!is.null(remote_type) && tolower(remote_type) %in% c("github", "gitlab", "bitbucket")) {
+      is_non_cran <- TRUE
+      slug <- if (!is.null(remote_user) && !is.null(remote_repo)) {
+        paste0(remote_user, "/", remote_repo, if (!is.null(remote_ref)) paste0("@", remote_ref) else "")
+      } else {
+        pkg_name
+      }
+      src_label <- paste0(raw_src, " (", slug, ")")
+    } else if (identical(tolower(raw_src), "bioconductor") ||
+      (!is.null(repo_name) && grepl("bioc", repo_name, ignore.case = TRUE))) {
+      is_non_cran <- TRUE
+      src_label <- "Bioconductor"
+    } else if (!identical(tolower(raw_src), "repository") ||
+      (!is.null(repo_name) && !identical(toupper(repo_name), "CRAN") && !identical(toupper(repo_name), "RSPM"))) {
+      is_non_cran <- TRUE
+      if (!is.null(repo_name) && nzchar(repo_name)) {
+        src_label <- paste0(raw_src, " (", repo_name, ")")
+      }
+    }
+
     list(
-      package = entry$Package %||% nm,
+      package = pkg_name,
       version = as.character(entry$Version %||% NA_character_),
-      source = as.character(entry$Source %||% "renv.lock")
+      source = src_label,
+      is_non_cran = is_non_cran
     )
   })
 
@@ -406,10 +528,11 @@ parse_renv_lock <- function(path) {
     tibble::tibble(
       package = vapply(pkg_rows, `[[`, character(1L), "package"),
       version = vapply(pkg_rows, `[[`, character(1L), "version"),
-      source = vapply(pkg_rows, `[[`, character(1L), "source")
+      source = vapply(pkg_rows, `[[`, character(1L), "source"),
+      is_non_cran = vapply(pkg_rows, `[[`, logical(1L), "is_non_cran")
     )
   } else {
-    tibble::tibble(package = character(), version = character(), source = character())
+    tibble::tibble(package = character(), version = character(), source = character(), is_non_cran = logical())
   }
 
   list(
@@ -454,14 +577,31 @@ parse_renv_lock <- function(path) {
 #' unlink(tmp, recursive = TRUE)
 scan_project <- function(path = ".", exclude = NULL, custom_sysreqs = NULL) {
   root <- normalize_project_path(path, must_exist = TRUE)
+  real_root <- canonical_real_dir(root)
   excludes <- unique(c(default_scan_excludes(), as.character(exclude)))
 
-  all_entries <- tryCatch(
-    fs::dir_ls(root, recurse = TRUE, all = TRUE, type = "file", fail = FALSE),
+  raw_entries <- tryCatch(
+    fs::dir_ls(real_root, recurse = TRUE, all = TRUE, type = c("file", "symlink"), fail = FALSE),
     error = function(e) character()
   )
-  all_entries <- as.character(all_entries)
-  rels <- if (length(all_entries) > 0L) rel_path(all_entries, root) else character()
+  raw_entries <- as.character(raw_entries)
+
+  # Enforce strict symlink confinement: skip and record any symlink pointing outside root
+  skipped_external_symlinks <- character()
+  all_entries <- character()
+  if (length(raw_entries) > 0L) {
+    for (ent in raw_entries) {
+      if (!is_confined_existing_path(ent, real_root)) {
+        skipped_external_symlinks <- c(skipped_external_symlinks, rel_path(ent, real_root))
+        next
+      }
+      if (!fs::dir_exists(ent) && fs::file_exists(ent)) {
+        all_entries <- c(all_entries, ent)
+      }
+    }
+  }
+
+  rels <- if (length(all_entries) > 0L) rel_path(all_entries, real_root) else character()
   keep <- !is_excluded_rel_path(rels, excludes)
   all_entries <- all_entries[keep]
   rels <- rels[keep]
@@ -523,9 +663,9 @@ scan_project <- function(path = ".", exclude = NULL, custom_sysreqs = NULL) {
   seeds_detected <- integer()
   sysreq_strings <- character()
 
-  # 1. Inspect DESCRIPTION
-  desc_path <- file.path(root, "DESCRIPTION")
-  has_description <- fs::file_exists(desc_path)
+  # 1. Inspect DESCRIPTION (only if confined inside project root)
+  desc_path <- file.path(real_root, "DESCRIPTION")
+  has_description <- fs::file_exists(desc_path) && is_confined_existing_path(desc_path, real_root)
   desc_pkg_name <- NULL
   desc_is_r_package <- FALSE
   if (has_description) {
@@ -533,7 +673,7 @@ scan_project <- function(path = ".", exclude = NULL, custom_sysreqs = NULL) {
     if (!is.null(d)) {
       desc_pkg_name <- tryCatch(d$get_field("Package"), error = function(e) NULL)
       if (!is.null(desc_pkg_name) &&
-        (fs::dir_exists(file.path(root, "R")) || fs::file_exists(file.path(root, "NAMESPACE")))) {
+        (fs::dir_exists(file.path(real_root, "R")) || fs::file_exists(file.path(real_root, "NAMESPACE")))) {
         desc_is_r_package <- TRUE
       }
       deps <- tryCatch(d$get_deps(), error = function(e) NULL)
@@ -542,6 +682,7 @@ scan_project <- function(path = ".", exclude = NULL, custom_sysreqs = NULL) {
           dp <- deps$package[[i]]
           tp <- deps$type[[i]]
           if (identical(dp, "R")) next
+          validate_r_package_names(dp, arg = "DESCRIPTION dependency")
           is_req <- tp %in% c("Imports", "Depends", "LinkingTo")
           add_pkg_evidence(dp, "DESCRIPTION", paste0("DESCRIPTION:", tp), required = is_req)
           if (identical(tp, "LinkingTo")) {
@@ -565,31 +706,39 @@ scan_project <- function(path = ".", exclude = NULL, custom_sysreqs = NULL) {
     }
   }
 
-  # 2. Inspect renv.lock
-  renv_lock_path <- file.path(root, "renv.lock")
-  has_renv <- fs::file_exists(renv_lock_path)
+  # 2. Inspect renv.lock (only if confined inside project root)
+  renv_lock_path <- file.path(real_root, "renv.lock")
+  has_renv <- fs::file_exists(renv_lock_path) && is_confined_existing_path(renv_lock_path, real_root)
   renv_info <- if (has_renv) parse_renv_lock(renv_lock_path) else NULL
   renv_versions <- list()
+  non_cran_packages <- character()
   if (!is.null(renv_info) && nrow(renv_info$packages) > 0L) {
     for (i in seq_len(nrow(renv_info$packages))) {
       p <- renv_info$packages$package[[i]]
       renv_versions[[p]] <- list(
         version = renv_info$packages$version[[i]],
-        source = renv_info$packages$source[[i]]
+        source = renv_info$packages$source[[i]],
+        is_non_cran = isTRUE(renv_info$packages$is_non_cran[[i]])
       )
+      if (isTRUE(renv_info$packages$is_non_cran[[i]])) {
+        non_cran_packages <- c(non_cran_packages, p)
+      }
       add_pkg_evidence(p, "renv.lock", paste0("renv:", renv_info$packages$source[[i]]), required = TRUE)
     }
   }
 
-  # 3. Inspect _quarto.yml / _quarto.yaml
-  quarto_yml_candidates <- file.path(root, c("_quarto.yml", "_quarto.yaml"))
-  has_quarto_yml <- any(fs::file_exists(quarto_yml_candidates))
+  # 3. Inspect _quarto.yml / _quarto.yaml (confined & safe_yaml_read)
+  quarto_yml_candidates <- file.path(real_root, c("_quarto.yml", "_quarto.yaml"))
+  valid_qy <- vapply(quarto_yml_candidates, function(p) {
+    fs::file_exists(p) && is_confined_existing_path(p, real_root)
+  }, logical(1L))
+  has_quarto_yml <- any(valid_qy)
   quarto_project_type <- NULL
   if (has_quarto_yml) {
-    qy_path <- quarto_yml_candidates[fs::file_exists(quarto_yml_candidates)][[1L]]
+    qy_path <- quarto_yml_candidates[valid_qy][[1L]]
     qy_rel <- basename(qy_path)
     add_tc("quarto", qy_rel)
-    qmeta <- tryCatch(yaml::read_yaml(qy_path), error = function(e) list())
+    qmeta <- tryCatch(safe_yaml_read(qy_path), error = function(e) list())
     if (is.list(qmeta)) {
       quarto_project_type <- qmeta$project$type %||% NULL
       ys <- inspect_yaml_metadata(qmeta, qy_rel)
@@ -866,10 +1015,12 @@ scan_project <- function(path = ".", exclude = NULL, custom_sysreqs = NULL) {
       shiny_async_reasons = unique(shiny_async_reasons),
       files = files_tbl,
       packages = packages_tbl,
+      non_cran_packages = sort(unique(non_cran_packages)),
       sysreqs = sysreqs_tbl,
       toolchains = toolchains,
       python_packages = sort(unique(python_pkgs)),
       seeds_detected = sort(unique(seeds_detected)),
+      skipped_external_symlinks = sort(unique(skipped_external_symlinks)),
       git = detect_git_info(root),
       scanned_at = utc_now_iso()
     ),

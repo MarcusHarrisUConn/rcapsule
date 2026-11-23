@@ -13,11 +13,13 @@ verify_file_hashes <- function(records, root) {
     ))
   }
 
+  real_root <- canonical_real_dir(root)
   rows <- lapply(records, function(rec) {
-    fp <- file.path(root, rec$path)
+    rel <- assert_safe_manifest_rel_path(rec$path, arg = "manifest artifact path")
+    fp <- assert_confined_path(rel, root = real_root, must_exist = FALSE, arg = "manifest artifact path")
     if (!fs::file_exists(fp)) {
       list(
-        path = rec$path,
+        path = rel,
         status = "missing",
         passed = FALSE,
         expected_sha256 = rec$sha256,
@@ -26,9 +28,9 @@ verify_file_hashes <- function(records, root) {
       )
     } else {
       act <- sha256_file(fp)
-      ok <- identical(act, rec$sha256)
+      ok <- constant_time_equal(act, as.character(rec$sha256 %||% ""))
       list(
-        path = rec$path,
+        path = rel,
         status = if (ok) "exact_match" else "mismatch",
         passed = ok,
         expected_sha256 = rec$sha256,
@@ -48,39 +50,61 @@ verify_file_hashes <- function(records, root) {
   )
 }
 
-# Stage an isolated clean sandbox directory strictly excluding recorded outputs
+# Stage an isolated clean sandbox directory strictly excluding recorded outputs and external symlinks
 stage_clean_sandbox <- function(root, manifest, sandbox_dir) {
   fs::dir_create(sandbox_dir)
-  output_rels <- vapply(manifest$artifacts$outputs, `[[`, character(1L), "path")
+  real_root <- canonical_real_dir(root)
+  real_sandbox <- canonical_real_dir(sandbox_dir)
 
-  all_files <- as.character(fs::dir_ls(root, recurse = TRUE, all = TRUE, type = "file", fail = FALSE))
-  if (length(all_files) > 0L) {
-    rels <- rel_path(all_files, root)
-    excludes <- c(default_scan_excludes(), "capsule.json")
-    keep <- !is_excluded_rel_path(rels, excludes) & !(rels %in% output_rels)
-    copy_files <- all_files[keep]
-    copy_rels <- rels[keep]
+  output_rels <- vapply(manifest$artifacts$outputs, function(rec) {
+    assert_safe_manifest_rel_path(rec$path, arg = "manifest output path")
+  }, character(1L))
 
-    for (i in seq_along(copy_files)) {
-      dest <- file.path(sandbox_dir, copy_rels[[i]])
-      fs::dir_create(fs::path_dir(dest))
-      fs::file_copy(copy_files[[i]], dest, overwrite = TRUE)
+  all_entries <- as.character(fs::dir_ls(real_root, recurse = TRUE, all = TRUE, type = c("file", "symlink"), fail = FALSE))
+  staged_rels <- character()
+  if (length(all_entries) > 0L) {
+    # Skip any symlink pointing outside project root or directory symlinks
+    confined <- vapply(all_entries, is_confined_existing_path, logical(1L), real_root = real_root)
+    is_reg_file <- vapply(all_entries, function(p) {
+      !fs::dir_exists(p) && fs::file_exists(p)
+    }, logical(1L))
+    all_files <- all_entries[confined & is_reg_file]
+
+    if (length(all_files) > 0L) {
+      rels <- rel_path(all_files, real_root)
+      excludes <- c(default_scan_excludes(), "capsule.json")
+      keep <- !is_excluded_rel_path(rels, excludes) & !(rels %in% output_rels)
+      copy_files <- all_files[keep]
+      copy_rels <- rels[keep]
+
+      for (i in seq_along(copy_files)) {
+        rel_i <- assert_safe_manifest_rel_path(copy_rels[[i]], arg = "sandbox staged file")
+        dest <- assert_confined_path(rel_i, root = real_sandbox, must_exist = FALSE, arg = "sandbox destination")
+        fs::dir_create(fs::path_dir(dest))
+        fs::file_copy(copy_files[[i]], dest, overwrite = TRUE)
+        staged_rels <- c(staged_rels, rel_i)
+      }
     }
   }
 
   # Create empty parent directories for recorded outputs if they existed in root
   for (orel in output_rels) {
     parent <- fs::path_dir(orel)
-    if (!identical(parent, ".") && fs::dir_exists(file.path(root, parent))) {
-      fs::dir_create(file.path(sandbox_dir, parent))
+    if (!identical(parent, ".") && fs::dir_exists(file.path(real_root, parent))) {
+      parent_dest <- assert_confined_path(parent, root = real_sandbox, must_exist = FALSE, arg = "sandbox output dir")
+      fs::dir_create(parent_dest)
     }
   }
 
-  invisible(sandbox_dir)
+  sort(unique(staged_rels))
 }
 
 # Generate deterministic runner bootstrap script for sandbox or container execution
 write_runner_bootstrap <- function(sandbox_dir, entrypoint, seed, rng_kind) {
+  entrypoint <- assert_safe_manifest_rel_path(entrypoint, arg = "entrypoint")
+  validate_safe_rel_spec_path(entrypoint, arg = "entrypoint")
+  assert_confined_path(entrypoint, root = sandbox_dir, must_exist = TRUE, arg = "entrypoint")
+
   runner_path <- file.path(sandbox_dir, ".rcapsule_runner.R")
   ext <- tolower(tools::file_ext(entrypoint))
   kind_vec <- as.character(unlist(rng_kind))
@@ -123,10 +147,20 @@ write_runner_bootstrap <- function(sandbox_dir, entrypoint, seed, rng_kind) {
   runner_path
 }
 
-# Build clean controlled environment vector for child execution
-build_sandbox_env <- function(sandbox_dir, seed = NULL, env_vars = list()) {
-  cur <- Sys.getenv()
-  env <- as.list(cur)
+# Build clean controlled environment vector for child execution with secret scrubbing
+build_sandbox_env <- function(sandbox_dir, seed = NULL, env_vars = list(), scrub_secrets = TRUE) {
+  clean_user_env <- validate_env_vars(env_vars, arg = "env_vars")
+  cur <- as.list(Sys.getenv())
+
+  scrubbed_names <- character()
+  if (isTRUE(scrub_secrets)) {
+    sc_res <- scrub_sandbox_env(cur, explicit_env_vars = clean_user_env)
+    env <- sc_res$env
+    scrubbed_names <- sc_res$scrubbed
+  } else {
+    env <- cur
+  }
+
   env$TZ <- "UTC"
   env$LC_ALL <- "C.UTF-8"
   env$LANG <- "C.UTF-8"
@@ -135,12 +169,12 @@ build_sandbox_env <- function(sandbox_dir, seed = NULL, env_vars = list()) {
   if (!is.null(seed) && !is.na(seed)) {
     env$CAPSULE_SEED <- as.character(as.integer(seed))
   }
-  if (length(env_vars) > 0L) {
-    for (nm in names(env_vars)) {
-      env[[nm]] <- as.character(env_vars[[nm]])
+  if (length(clean_user_env) > 0L) {
+    for (nm in names(clean_user_env)) {
+      env[[nm]] <- clean_user_env[[nm]]
     }
   }
-  unlist(env)
+  list(env = unlist(env), scrubbed = scrubbed_names)
 }
 
 # Execute pipeline inside isolated local sandbox via callr::rscript
@@ -220,9 +254,10 @@ run_in_docker <- function(root, sandbox_dir, docker_image, docker_tag, seed, env
   if (!is.null(seed) && !is.na(seed)) {
     run_args <- c(run_args, "-e", paste0("CAPSULE_SEED=", as.integer(seed)))
   }
-  if (length(env_vars) > 0L) {
-    for (nm in names(env_vars)) {
-      run_args <- c(run_args, "-e", paste0(nm, "=", as.character(env_vars[[nm]])))
+  clean_user_env <- validate_env_vars(env_vars, arg = "env_vars")
+  if (length(clean_user_env) > 0L) {
+    for (nm in names(clean_user_env)) {
+      run_args <- c(run_args, "-e", paste0(nm, "=", clean_user_env[[nm]]))
     }
   }
   run_args <- c(
@@ -284,13 +319,22 @@ run_in_docker <- function(root, sandbox_dir, docker_image, docker_tag, seed, env
 #' @param reference_dir Optional directory containing verified baseline output
 #'   files for numeric-tolerance comparison (defaults to `path`; only used if
 #'   a baseline file's SHA-256 matches the manifest).
+#' @param strict_outputs Logical; if `TRUE`, fails verification when the
+#'   pipeline produces unexpected extra artifacts not declared in
+#'   `manifest$artifacts$outputs`. Defaults to `FALSE` (extra artifacts are
+#'   still detected and reported in `extra_artifacts`).
+#' @param scrub_secrets Logical; if `TRUE` (default), strips ambient credential
+#'   and token environment variables (`AWS_*`, `GITHUB_TOKEN`, `GH_TOKEN`,
+#'   `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `*_SECRET*`, `*_TOKEN*`, etc.)
+#'   before launching the isolated sandbox subprocess.
 #'
 #' @return An S3 object of class `rcapsule_verification` containing `status`
 #'   (`"verified_exact"`, `"verified_within_tolerance"`, or `"failed"`),
 #'   `passed` (logical), `runner`, `verified_at`, `duration_sec`,
 #'   `exit_status`, `manifest_integrity`, `input_checks`, `script_checks`,
-#'   `output_checks`, `failure_reasons`, `rng`, `environment`, `stdout`,
-#'   `stderr`, `sandbox_dir`, and `manifest`.
+#'   `output_checks`, `extra_artifacts`, `scrubbed_env_vars`,
+#'   `failure_reasons`, `rng`, `environment`, `stdout`, `stderr`,
+#'   `sandbox_dir`, and `manifest`.
 #' @export
 #' @examples
 #' tmp <- tempfile("rcapsule_verify_")
@@ -318,10 +362,13 @@ verify_capsule <- function(manifest,
                            docker_image = NULL,
                            docker_tag = NULL,
                            keep_sandbox = FALSE,
-                           reference_dir = NULL) {
+                           reference_dir = NULL,
+                           strict_outputs = FALSE,
+                           scrub_secrets = TRUE) {
   runner <- match.arg(runner)
   root <- normalize_project_path(path, must_exist = TRUE)
   ref_root <- if (!is.null(reference_dir)) normalize_project_path(reference_dir, must_exist = TRUE) else root
+  real_ref_root <- canonical_real_dir(ref_root)
 
   if (is.character(manifest) && length(manifest) == 1L) {
     manifest <- read_capsule_manifest(manifest)
@@ -333,7 +380,7 @@ verify_capsule <- function(manifest,
   # 1. Cryptographic manifest integrity check
   integrity <- verify_manifest_integrity(manifest, key = key)
 
-  # 2. Verify inputs & scripts on disk
+  # 2. Verify inputs & scripts on disk (with strict confinement)
   input_checks <- verify_file_hashes(manifest$artifacts$inputs, root)
   script_checks <- verify_file_hashes(manifest$artifacts$scripts, root)
 
@@ -350,23 +397,27 @@ verify_capsule <- function(manifest,
   if (is.null(eff_ep) || !nzchar(eff_ep)) {
     cli::cli_abort("No runnable {.arg entrypoint} specified in manifest or arguments.")
   }
+  eff_ep <- assert_safe_manifest_rel_path(eff_ep, arg = "entrypoint")
 
-  # 4. Stage clean isolated sandbox (excluding all recorded outputs!)
+  # 4. Stage clean isolated sandbox (excluding all recorded outputs and external symlinks!)
   sandbox_dir <- as.character(fs::path_norm(tempfile("rcapsule_sandbox_")))
   if (!isTRUE(keep_sandbox)) {
     on.exit(unlink(sandbox_dir, recursive = TRUE, force = TRUE), add = TRUE)
   }
-  stage_clean_sandbox(root, manifest, sandbox_dir)
-  runner_script <- write_runner_bootstrap(sandbox_dir, eff_ep, eff_seed, eff_rng_kind)
+  staged_rels <- stage_clean_sandbox(root, manifest, sandbox_dir)
+  real_sandbox <- canonical_real_dir(sandbox_dir)
+  runner_script <- write_runner_bootstrap(real_sandbox, eff_ep, eff_seed, eff_rng_kind)
 
-  # 5. Execute in sandbox or Docker
+  # 5. Execute in sandbox (with ambient secret scrubbing) or Docker
+  scrubbed_env_vars <- character()
   exec_res <- if (identical(runner, "sandbox")) {
-    run_env <- build_sandbox_env(sandbox_dir, seed = eff_seed, env_vars = env_vars)
-    run_in_sandbox(sandbox_dir, runner_script, env = run_env, timeout = timeout)
+    env_bundle <- build_sandbox_env(real_sandbox, seed = eff_seed, env_vars = env_vars, scrub_secrets = scrub_secrets)
+    scrubbed_env_vars <- env_bundle$scrubbed
+    run_in_sandbox(real_sandbox, runner_script, env = env_bundle$env, timeout = timeout)
   } else {
     run_in_docker(
       root = root,
-      sandbox_dir = sandbox_dir,
+      sandbox_dir = real_sandbox,
       docker_image = docker_image,
       docker_tag = docker_tag,
       seed = eff_seed,
@@ -375,19 +426,21 @@ verify_capsule <- function(manifest,
     )
   }
 
-  # 6. Compare every recorded output artifact
+  # 6. Compare every recorded output artifact (enforcing confinement & constant-time hash checks)
   out_records <- manifest$artifacts$outputs
+  output_rels <- character()
   out_rows <- lapply(out_records, function(rec) {
-    rel <- rec$path
+    rel <- assert_safe_manifest_rel_path(rec$path, arg = "manifest output path")
+    output_rels <<- c(output_rels, rel)
     file_tol <- eff_tols$files[[rel]] %||% eff_tols$default
-    abs_tol <- as.numeric(file_tol$abs_tol %||% 0)
-    rel_tol <- as.numeric(file_tol$rel_tol %||% 0)
+    abs_tol <- as.numeric(file_tol$abs_tol %||% file_tol$atol %||% 0)
+    rel_tol <- as.numeric(file_tol$rel_tol %||% file_tol$rtol %||% 0)
 
     # Locate trusted baseline for tolerance comparison:
-    # Either on-disk file whose hash matches manifest, or embedded manifest snapshot whose hash matches
-    ref_file <- file.path(ref_root, rel)
+    # Either confined on-disk file whose hash matches manifest, or embedded snapshot whose hash matches
+    ref_file <- assert_confined_path(rel, root = real_ref_root, must_exist = FALSE, arg = "reference output path")
     trusted_ref_path <- NULL
-    if (fs::file_exists(ref_file) && identical(sha256_file(ref_file), rec$sha256)) {
+    if (fs::file_exists(ref_file) && constant_time_equal(sha256_file(ref_file), as.character(rec$sha256 %||% ""))) {
       trusted_ref_path <- ref_file
     }
 
@@ -395,14 +448,15 @@ verify_capsule <- function(manifest,
     if (is.null(trusted_ref_path) && !is.null(manifest$snapshots[[rel]])) {
       snap <- manifest$snapshots[[rel]]
       raw_bytes <- tryCatch(openssl::base64_decode(snap$data), error = function(e) NULL)
-      if (!is.null(raw_bytes) && identical(sha256_raw(raw_bytes), rec$sha256)) {
+      if (!is.null(raw_bytes) && constant_time_equal(sha256_raw(raw_bytes), as.character(rec$sha256 %||% ""))) {
         expected_raw <- raw_bytes
       }
     }
 
+    actual_fp <- assert_confined_path(rel, root = real_sandbox, must_exist = FALSE, arg = "sandbox output path")
     cmp <- compare_artifacts(
       expected_path = trusted_ref_path,
-      actual_path = file.path(sandbox_dir, rel),
+      actual_path = actual_fp,
       expected_sha256 = rec$sha256,
       abs_tol = abs_tol,
       rel_tol = rel_tol,
@@ -412,6 +466,16 @@ verify_capsule <- function(manifest,
     cmp$path <- rel
     cmp
   })
+
+  # Detect unexpected extra artifacts created inside sandbox during execution
+  post_entries <- as.character(fs::dir_ls(real_sandbox, recurse = TRUE, all = TRUE, type = "file", fail = FALSE))
+  extra_artifacts <- character()
+  if (length(post_entries) > 0L) {
+    post_rels <- rel_path(post_entries, real_sandbox)
+    internal_mask <- post_rels == ".rcapsule_runner.R" | grepl("^\\.rcapsule_cache(/|$)", post_rels)
+    known_rels <- unique(c(staged_rels, output_rels))
+    extra_artifacts <- sort(setdiff(post_rels[!internal_mask], known_rels))
+  }
 
   output_checks <- if (length(out_rows) > 0L) {
     tibble::tibble(
@@ -461,6 +525,12 @@ verify_capsule <- function(manifest,
     bad_out <- output_checks$path[!output_checks$passed]
     failure_reasons <- c(failure_reasons, paste0("Output verification failed for: ", paste(bad_out, collapse = ", ")))
   }
+  if (isTRUE(strict_outputs) && length(extra_artifacts) > 0L) {
+    failure_reasons <- c(
+      failure_reasons,
+      paste0("Unexpected extra output artifact(s) produced: ", paste(extra_artifacts, collapse = ", "))
+    )
+  }
 
   passed <- length(failure_reasons) == 0L
   status <- if (!passed) {
@@ -484,6 +554,8 @@ verify_capsule <- function(manifest,
       input_checks = input_checks,
       script_checks = script_checks,
       output_checks = output_checks,
+      extra_artifacts = extra_artifacts,
+      scrubbed_env_vars = scrubbed_env_vars,
       failure_reasons = failure_reasons,
       rng = list(seed = eff_seed, kind = eff_rng_kind),
       environment = list(

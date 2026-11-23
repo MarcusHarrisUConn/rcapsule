@@ -10,6 +10,8 @@ compare_artifacts(
   expected_sha256 = NULL,
   abs_tol = 0,
   rel_tol = 0,
+  atol = NULL,
+  rtol = NULL,
   format = "auto",
   ignore_attributes = FALSE,
   expected_raw = NULL
@@ -28,11 +30,15 @@ artifact.}
 
 \item{rel_tol}{Non-negative relative numeric tolerance (default \code{0}).}
 
+\item{atol}{Optional alias for \code{abs_tol}; overrides \code{abs_tol} if non-\code{NULL}.}
+
+\item{rtol}{Optional alias for \code{rel_tol}; overrides \code{rel_tol} if non-\code{NULL}.}
+
 \item{format}{Artifact format: \code{"auto"} (default), \code{"csv"}, \code{"tsv"},
 \code{"json"}, \code{"rds"}, \code{"text"}, or \code{"binary"}.}
 
-\item{ignore_attributes}{Logical; if \code{TRUE}, ignores vector name attributes
-during RDS comparison.}
+\item{ignore_attributes}{Logical; if \code{TRUE}, ignores vector/matrix name
+attributes during RDS comparison.}
 
 \item{expected_raw}{Optional raw vector of the expected artifact bytes (e.g.,
 decoded from an embedded manifest snapshot).}
@@ -45,16 +51,18 @@ A list with fields \code{status} (\code{"exact_match"}, \code{"within_tolerance"
 }
 \description{
 Fast-paths exact bit-for-bit verification via SHA-256. When digests differ
-and numeric tolerances (\code{abs_tol > 0} or \code{rel_tol > 0}) are permitted,
-parses \code{csv}, \code{tsv}, \code{json}, or \code{rds} artifacts and verifies that every
-numeric element satisfies \verb{abs(a - b) <= abs_tol + rel_tol * max(|a|, |b|)}
-while all non-numeric keys, columns, and labels match identically.
+and numeric tolerances (\code{abs_tol}/\code{atol > 0} or \code{rel_tol}/\code{rtol > 0}) are
+permitted, recursively parses \code{csv}, \code{tsv}, \code{json}, or \code{rds} artifacts
+(including nested lists, data frames, matrices, and arrays) and verifies that
+every numeric element satisfies \verb{abs(a - b) <= abs_tol + rel_tol * max(|a|, |b|)}
+while preserving exact \code{NA}/\code{NaN}/\code{Inf} alignment and exact equality for all
+non-numeric keys, columns, dimensions, and labels.
 }
 \examples{
 f1 <- tempfile(fileext = ".csv")
 f2 <- tempfile(fileext = ".csv")
 write.csv(data.frame(k = c("a", "b"), est = c(1.0000, 2.0000)), f1, row.names = FALSE)
 write.csv(data.frame(k = c("a", "b"), est = c(1.0002, 1.9999)), f2, row.names = FALSE)
-compare_artifacts(f1, f2, abs_tol = 1e-3)
+compare_artifacts(f1, f2, atol = 1e-3, rtol = 1e-3)
 unlink(c(f1, f2))
 }

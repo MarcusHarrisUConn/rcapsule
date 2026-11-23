@@ -24,15 +24,15 @@ status_label <- function(status) {
   )
 }
 
-# Build GitHub-Flavored Markdown reproducibility certificate
+# Build GitHub-Flavored Markdown reproducibility certificate (HTML/table-escaped)
 build_certificate_markdown <- function(v, title) {
   m <- v$manifest
   tcs <- unlist(m$environment$toolchains)
-  tc_str <- if (length(tcs) > 0L) paste(tcs, collapse = ", ") else "Standard R"
+  tc_str <- if (length(tcs) > 0L) sanitize_markdown_cell(paste(tcs, collapse = ", ")) else "Standard R"
   git_str <- if (isTRUE(m$project$git$is_repo)) {
     paste0(
-      "`", short_sha(m$project$git$commit), "` (branch `",
-      m$project$git$branch %||% "detached", "`, dirty=",
+      "`", sanitize_markdown_cell(short_sha(m$project$git$commit)), "` (branch `",
+      sanitize_markdown_cell(m$project$git$branch %||% "detached"), "`, dirty=",
       if (isTRUE(m$project$git$dirty)) "true" else "false", ")"
     )
   } else {
@@ -51,25 +51,30 @@ build_certificate_markdown <- function(v, title) {
     "Unsigned (SHA-256 Content Digest Only)"
   }
 
+  extra_arts <- v$extra_artifacts %||% character()
+  n_scrubbed <- length(v$scrubbed_env_vars %||% character())
+
   lines <- c(
-    paste0("# ", title),
+    paste0("# ", sanitize_markdown_inline(title)),
     "",
     paste0("> **Verification Verdict:** **", status_label(v$status), "**  "),
-    paste0("> **Capsule ID:** `", m$capsule_id, "` | **Verified At:** `", v$verified_at, "` | **Runner:** `", v$runner, "` (", v$duration_sec, "s)"),
+    paste0("> **Capsule ID:** `", sanitize_markdown_inline(m$capsule_id), "` | **Verified At:** `", sanitize_markdown_inline(v$verified_at), "` | **Runner:** `", sanitize_markdown_inline(v$runner), "` (", v$duration_sec, "s)"),
     "",
     "## 1. Provenance & Environment Summary",
     "",
     "| Field | Recorded Value |",
     "| :--- | :--- |",
-    paste0("| Project | `", m$project$name, "` (`", m$project$type, "`) |"),
-    paste0("| Entrypoint | `", v$entrypoint, "` |"),
+    paste0("| Project | `", sanitize_markdown_cell(m$project$name), "` (`", sanitize_markdown_cell(m$project$type), "`) |"),
+    paste0("| Entrypoint | `", sanitize_markdown_cell(v$entrypoint), "` |"),
     paste0("| Git Revision | ", git_str, " |"),
-    paste0("| Manifest R Version | `", m$environment$r_version, "` |"),
-    paste0("| Verification Host | R `", v$environment$r_version, "` on `", v$environment$platform, "` (`", v$environment$os, "`) |"),
-    paste0("| Environment Digest | `", short_sha(m$environment$environment_digest), "` |"),
+    paste0("| Manifest R Version | `", sanitize_markdown_cell(m$environment$r_version), "` |"),
+    paste0("| Verification Host | R `", sanitize_markdown_cell(v$environment$r_version), "` on `", sanitize_markdown_cell(v$environment$platform), "` (`", sanitize_markdown_cell(v$environment$os), "`) |"),
+    paste0("| Environment Digest | `", sanitize_markdown_cell(short_sha(m$environment$environment_digest)), "` |"),
     paste0("| Detected Toolchains | ", tc_str, " |"),
     paste0("| OS System Libraries | ", length(m$environment$sysreqs), " apt packages |"),
-    paste0("| RNG Configuration | Seed `", v$rng$seed %||% "unset", "` (`", paste(v$rng$kind, collapse = " / "), "`) |"),
+    paste0("| RNG Configuration | Seed `", sanitize_markdown_cell(v$rng$seed %||% "unset"), "` (`", sanitize_markdown_cell(paste(v$rng$kind, collapse = " / ")), "`) |"),
+    paste0("| Ambient Secrets Scrubbed | ", n_scrubbed, " variable(s) |"),
+    paste0("| Unexpected Extra Artifacts | ", length(extra_arts), " file(s) |"),
     paste0("| Execution Exit Status | `", v$exit_status, "` |"),
     "",
     "## 2. Cryptographic Manifest Integrity",
@@ -77,8 +82,8 @@ build_certificate_markdown <- function(v, title) {
     "| Check | Status | Details |",
     "| :--- | :--- | :--- |",
     paste0("| Canonical Content Digest | ", if (isTRUE(v$manifest_integrity$content_valid)) "PASS" else "FAIL",
-           " | Recorded `", short_sha(v$manifest_integrity$recorded_digest),
-           "` vs Computed `", short_sha(v$manifest_integrity$computed_digest), "` |"),
+           " | Recorded `", sanitize_markdown_cell(short_sha(v$manifest_integrity$recorded_digest)),
+           "` vs Computed `", sanitize_markdown_cell(short_sha(v$manifest_integrity$computed_digest)), "` |"),
     paste0("| Keyed Signature | ", if (isTRUE(v$manifest_integrity$valid)) "PASS" else "FAIL", " | ", sig_str, " |"),
     ""
   )
@@ -96,15 +101,23 @@ build_certificate_markdown <- function(v, title) {
       lines <- c(
         lines,
         paste0(
-          "| `", r$path, "` | **", status_label(r$status), "** | `", short_sha(r$expected_sha256),
-          "` | `", short_sha(r$actual_sha256), "` | ", fmt_num(r$max_abs_diff),
+          "| `", sanitize_markdown_cell(r$path), "` | **", status_label(r$status), "** | `", sanitize_markdown_cell(short_sha(r$expected_sha256)),
+          "` | `", sanitize_markdown_cell(short_sha(r$actual_sha256)), "` | ", fmt_num(r$max_abs_diff),
           " | ", fmt_num(r$max_rel_diff), " | ", fmt_num(r$abs_tol), " / ", fmt_num(r$rel_tol),
-          " | ", gsub("\\|", "\\\\|", r$details), " |"
+          " | ", sanitize_markdown_cell(r$details), " |"
         )
       )
     }
   } else {
     lines <- c(lines, "_No output artifacts recorded in manifest._")
+  }
+
+  if (length(extra_arts) > 0L) {
+    lines <- c(
+      lines,
+      "",
+      paste0("**Unexpected Extra Artifacts Detected:** ", paste0("`", vapply(extra_arts, sanitize_markdown_inline, character(1L)), "`", collapse = ", "))
+    )
   }
 
   # Section 4: Inputs & Scripts integrity
@@ -124,8 +137,8 @@ build_certificate_markdown <- function(v, title) {
       lines <- c(
         lines,
         paste0(
-          "| ", r$role, " | `", r$path, "` | ", status_label(r$status),
-          " | `", short_sha(r$expected_sha256), "` | `", short_sha(r$actual_sha256), "` |"
+          "| ", sanitize_markdown_cell(r$role), " | `", sanitize_markdown_cell(r$path), "` | ", status_label(r$status),
+          " | `", sanitize_markdown_cell(short_sha(r$expected_sha256)), "` | `", sanitize_markdown_cell(short_sha(r$actual_sha256)), "` |"
         )
       )
     }
@@ -136,7 +149,7 @@ build_certificate_markdown <- function(v, title) {
   if (length(v$failure_reasons) > 0L) {
     lines <- c(lines, "", "## 5. Failure Diagnostics", "")
     for (fr in v$failure_reasons) {
-      lines <- c(lines, paste0("- ", fr))
+      lines <- c(lines, paste0("- ", sanitize_markdown_inline(fr)))
     }
   }
 
@@ -144,17 +157,20 @@ build_certificate_markdown <- function(v, title) {
     lines,
     "",
     "---",
-    paste0("_Generated by `rcapsule` ", as.character(utils::packageVersion("rcapsule")), " (schema v", m$schema_version, ")._")
+    paste0("_Generated by `rcapsule` ", as.character(utils::packageVersion("rcapsule")), " (schema v", sanitize_markdown_inline(m$schema_version), ")._")
   )
 
   paste0(paste(lines, collapse = "\n"), "\n")
 }
 
-# Build self-contained HTML5 reproducibility certificate using htmltools
+# Build self-contained HTML5 reproducibility certificate using htmltools with strict XSS escaping + CSP
 build_certificate_html <- function(v, title) {
   m <- v$manifest
   tcs <- unlist(m$environment$toolchains)
-  tc_str <- if (length(tcs) > 0L) paste(tcs, collapse = ", ") else "Standard R"
+  tc_str <- safe_html_text(if (length(tcs) > 0L) paste(tcs, collapse = ", ") else "Standard R")
+  safe_title <- safe_html_text(title)
+  extra_arts <- v$extra_artifacts %||% character()
+  n_scrubbed <- length(v$scrubbed_env_vars %||% character())
 
   theme_cls <- switch(
     v$status,
@@ -177,14 +193,14 @@ build_certificate_html <- function(v, title) {
     lapply(seq_len(nrow(v$output_checks)), function(i) {
       r <- v$output_checks[i, ]
       htmltools::tags$tr(
-        htmltools::tags$td(htmltools::tags$code(r$path)),
+        htmltools::tags$td(htmltools::tags$code(safe_html_text(r$path))),
         htmltools::tags$td(badge_tag(r$status)),
-        htmltools::tags$td(htmltools::tags$code(class = "sha", short_sha(r$expected_sha256))),
-        htmltools::tags$td(htmltools::tags$code(class = "sha", short_sha(r$actual_sha256))),
+        htmltools::tags$td(htmltools::tags$code(class = "sha", safe_html_text(short_sha(r$expected_sha256)))),
+        htmltools::tags$td(htmltools::tags$code(class = "sha", safe_html_text(short_sha(r$actual_sha256)))),
         htmltools::tags$td(class = "num", fmt_num(r$max_abs_diff)),
         htmltools::tags$td(class = "num", fmt_num(r$max_rel_diff)),
         htmltools::tags$td(class = "num", paste0(fmt_num(r$abs_tol), " / ", fmt_num(r$rel_tol))),
-        htmltools::tags$td(r$details)
+        htmltools::tags$td(safe_html_text(r$details))
       )
     })
   } else {
@@ -199,40 +215,50 @@ build_certificate_html <- function(v, title) {
     lapply(seq_len(nrow(combined)), function(i) {
       r <- combined[i, ]
       htmltools::tags$tr(
-        htmltools::tags$td(r$role),
-        htmltools::tags$td(htmltools::tags$code(r$path)),
+        htmltools::tags$td(safe_html_text(r$role)),
+        htmltools::tags$td(htmltools::tags$code(safe_html_text(r$path))),
         htmltools::tags$td(badge_tag(r$status)),
-        htmltools::tags$td(htmltools::tags$code(class = "sha", short_sha(r$expected_sha256))),
-        htmltools::tags$td(htmltools::tags$code(class = "sha", short_sha(r$actual_sha256)))
+        htmltools::tags$td(htmltools::tags$code(class = "sha", safe_html_text(short_sha(r$expected_sha256)))),
+        htmltools::tags$td(htmltools::tags$code(class = "sha", safe_html_text(short_sha(r$actual_sha256))))
       )
     })
   } else {
     list(htmltools::tags$tr(htmltools::tags$td(colspan = "5", "No input or script artifacts recorded.")))
   }
 
-  git_summary <- if (isTRUE(m$project$git$is_repo)) {
+  git_summary <- safe_html_text(if (isTRUE(m$project$git$is_repo)) {
     paste0(short_sha(m$project$git$commit), " (", m$project$git$branch %||% "detached", ", dirty=", isTRUE(m$project$git$dirty), ")")
   } else {
     "Not a Git repository"
-  }
+  })
 
   fail_block <- if (length(v$failure_reasons) > 0L) {
     htmltools::tags$section(
       class = "card fail-box",
       htmltools::tags$h2("Failure Diagnostics"),
-      htmltools::tags$ul(lapply(v$failure_reasons, htmltools::tags$li))
+      htmltools::tags$ul(lapply(v$failure_reasons, function(fr) htmltools::tags$li(safe_html_text(fr))))
     )
   } else {
     NULL
   }
 
-  log_text <- paste(
+  extra_block <- if (length(extra_arts) > 0L) {
+    htmltools::tags$section(
+      class = "card",
+      htmltools::tags$h2("Unexpected Extra Artifacts"),
+      htmltools::tags$ul(lapply(extra_arts, function(ea) htmltools::tags$li(htmltools::tags$code(safe_html_text(ea)))))
+    )
+  } else {
+    NULL
+  }
+
+  log_text <- safe_html_text(paste(
     c(
-      if (nzchar(v$stdout)) c("=== STDOUT ===", v$stdout) else NULL,
-      if (nzchar(v$stderr)) c("=== STDERR ===", v$stderr) else NULL
+      if (nzchar(v$stdout %||% "")) c("=== STDOUT ===", v$stdout) else NULL,
+      if (nzchar(v$stderr %||% "")) c("=== STDERR ===", v$stderr) else NULL
     ),
     collapse = "\n"
-  )
+  ))
 
   css <- paste(
     ":root { --ink:#17212b; --muted:#52606d; --bg:#f7f9fc; --card:#ffffff; --border:#d9e2ec; --exact:#0d7a43; --exact-bg:#e6f6ee; --tol:#9c5700; --tol-bg:#fff4e0; --fail:#b42318; --fail-bg:#fdecec; }",
@@ -275,13 +301,13 @@ build_certificate_html <- function(v, title) {
       htmltools::tags$header(
         class = paste("hero", theme_cls),
         htmltools::tags$div(class = "verdict", status_label(v$status)),
-        htmltools::tags$h1(title),
+        htmltools::tags$h1(safe_title),
         htmltools::tags$div(
           class = "meta-row",
-          htmltools::tags$span("Capsule ID: ", htmltools::tags$code(m$capsule_id)),
-          htmltools::tags$span("Project: ", htmltools::tags$strong(m$project$name), " (", m$project$type, ")"),
-          htmltools::tags$span("Verified: ", htmltools::tags$code(v$verified_at)),
-          htmltools::tags$span("Runner: ", htmltools::tags$code(v$runner), " (", v$duration_sec, "s)")
+          htmltools::tags$span("Capsule ID: ", htmltools::tags$code(safe_html_text(m$capsule_id))),
+          htmltools::tags$span("Project: ", htmltools::tags$strong(safe_html_text(m$project$name)), " (", safe_html_text(m$project$type), ")"),
+          htmltools::tags$span("Verified: ", htmltools::tags$code(safe_html_text(v$verified_at))),
+          htmltools::tags$span("Runner: ", htmltools::tags$code(safe_html_text(v$runner)), " (", v$duration_sec, "s)")
         )
       ),
       htmltools::tags$div(
@@ -310,10 +336,11 @@ build_certificate_html <- function(v, title) {
         htmltools::tags$div(
           class = "kpi",
           htmltools::tags$div(class = "kpi-label", "Environment Digest"),
-          htmltools::tags$div(class = "kpi-val", htmltools::tags$code(short_sha(m$environment$environment_digest)))
+          htmltools::tags$div(class = "kpi-val", htmltools::tags$code(safe_html_text(short_sha(m$environment$environment_digest))))
         )
       ),
       fail_block,
+      extra_block,
       htmltools::tags$section(
         class = "card",
         htmltools::tags$h2("Output Artifact Verification"),
@@ -338,13 +365,14 @@ build_certificate_html <- function(v, title) {
         htmltools::tags$h2("Provenance & Runtime Environment"),
         htmltools::tags$table(
           htmltools::tags$tbody(
-            htmltools::tags$tr(htmltools::tags$th("Entrypoint"), htmltools::tags$td(htmltools::tags$code(v$entrypoint))),
+            htmltools::tags$tr(htmltools::tags$th("Entrypoint"), htmltools::tags$td(htmltools::tags$code(safe_html_text(v$entrypoint)))),
             htmltools::tags$tr(htmltools::tags$th("Git Revision"), htmltools::tags$td(git_summary)),
-            htmltools::tags$tr(htmltools::tags$th("Manifest R Version"), htmltools::tags$td(m$environment$r_version)),
-            htmltools::tags$tr(htmltools::tags$th("Verification Host"), htmltools::tags$td(paste0("R ", v$environment$r_version, " (", v$environment$platform, ", ", v$environment$os, ")"))),
+            htmltools::tags$tr(htmltools::tags$th("Manifest R Version"), htmltools::tags$td(safe_html_text(m$environment$r_version))),
+            htmltools::tags$tr(htmltools::tags$th("Verification Host"), htmltools::tags$td(safe_html_text(paste0("R ", v$environment$r_version, " (", v$environment$platform, ", ", v$environment$os, ")")))),
             htmltools::tags$tr(htmltools::tags$th("Detected Toolchains"), htmltools::tags$td(tc_str)),
-            htmltools::tags$tr(htmltools::tags$th("RNG Configuration"), htmltools::tags$td(paste0("seed=", v$rng$seed %||% "unset", " (", paste(v$rng$kind, collapse = " / "), ")"))),
-            htmltools::tags$tr(htmltools::tags$th("Content Digest"), htmltools::tags$td(htmltools::tags$code(v$manifest_integrity$computed_digest))),
+            htmltools::tags$tr(htmltools::tags$th("RNG Configuration"), htmltools::tags$td(safe_html_text(paste0("seed=", v$rng$seed %||% "unset", " (", paste(v$rng$kind, collapse = " / "), ")")))),
+            htmltools::tags$tr(htmltools::tags$th("Ambient Secrets Scrubbed"), htmltools::tags$td(paste0(n_scrubbed, " variable(s)"))),
+            htmltools::tags$tr(htmltools::tags$th("Content Digest"), htmltools::tags$td(htmltools::tags$code(safe_html_text(v$manifest_integrity$computed_digest)))),
             htmltools::tags$tr(htmltools::tags$th("HMAC Signature"), htmltools::tags$td(if (isTRUE(v$manifest_integrity$signed)) paste0("Signed (valid=", v$manifest_integrity$signature_valid, ")") else "Unsigned"))
           )
         )
@@ -375,8 +403,8 @@ build_certificate_html <- function(v, title) {
         )
       },
       htmltools::tags$footer(
-        paste0("Generated by rcapsule ", as.character(utils::packageVersion("rcapsule")),
-               " | Schema v", m$schema_version, " | Standalone Verification Certificate")
+        safe_html_text(paste0("Generated by rcapsule ", as.character(utils::packageVersion("rcapsule")),
+                              " | Schema v", m$schema_version, " | Standalone Verification Certificate"))
       )
     )
   )
@@ -387,7 +415,8 @@ build_certificate_html <- function(v, title) {
     "<head>\n",
     "  <meta charset=\"utf-8\">\n",
     "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n",
-    "  <title>", htmltools::htmlEscape(title), "</title>\n",
+    "  <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline';\">\n",
+    "  <title>", escape_html_strict(safe_title), "</title>\n",
     "  <style>\n", css, "\n  </style>\n",
     "</head>\n",
     as.character(body_tag), "\n",

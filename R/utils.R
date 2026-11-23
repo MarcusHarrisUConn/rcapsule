@@ -120,29 +120,29 @@ canonicalize_object <- function(x) {
   x
 }
 
-# Deterministic compact canonical JSON representation for cryptographic hashing
+# Deterministic compact canonical JSON representation for cryptographic hashing (UTF-8)
 to_canonical_json <- function(x) {
   canon <- canonicalize_object(x)
-  as.character(jsonlite::toJSON(
+  enc2utf8(as.character(jsonlite::toJSON(
     canon,
     auto_unbox = TRUE,
     null = "null",
     na = "null",
     digits = NA,
     pretty = FALSE
-  ))
+  )))
 }
 
-# Pretty deterministic JSON for human-readable capsule.json output
+# Pretty deterministic JSON for human-readable capsule.json output (UTF-8)
 to_pretty_json <- function(x) {
-  as.character(jsonlite::toJSON(
+  enc2utf8(as.character(jsonlite::toJSON(
     x,
     auto_unbox = TRUE,
     null = "null",
     na = "null",
     digits = NA,
     pretty = TRUE
-  ))
+  )))
 }
 
 # Strip openssl hash S3 class into a plain character scalar
@@ -165,34 +165,20 @@ sha256_raw <- function(raw_bytes) {
   as_plain_hex(openssl::sha256(raw_bytes))
 }
 
-# SHA-256 hex digest of a character string
+# SHA-256 hex digest of a UTF-8 character string
 sha256_string <- function(text) {
-  as_plain_hex(openssl::sha256(paste(text, collapse = "\n")))
+  utf8_bytes <- charToRaw(enc2utf8(paste(text, collapse = "\n")))
+  as_plain_hex(openssl::sha256(utf8_bytes))
 }
 
-# HMAC-SHA256 hex digest using openssl
+# HMAC-SHA256 hex digest using openssl over explicit UTF-8 bytes
 hmac_sha256 <- function(text, key) {
   if (!is.character(key) || length(key) != 1L || is.na(key) || !nzchar(key)) {
     cli::cli_abort("{.arg key} must be a non-empty character string.")
   }
-  as_plain_hex(openssl::sha256(paste(text, collapse = "\n"), key = key))
-}
-
-# Constant-time string equality check for cryptographic MAC verification
-constant_time_equal <- function(a, b) {
-  if (!is.character(a) || !is.character(b) || length(a) != 1L || length(b) != 1L) {
-    return(FALSE)
-  }
-  if (is.na(a) || is.na(b)) {
-    return(FALSE)
-  }
-  ra <- charToRaw(a)
-  rb <- charToRaw(b)
-  if (length(ra) != length(rb)) {
-    return(FALSE)
-  }
-  diff_bits <- bitwXor(as.integer(ra), as.integer(rb))
-  identical(sum(diff_bits), 0L)
+  utf8_bytes <- charToRaw(enc2utf8(paste(text, collapse = "\n")))
+  key_bytes <- charToRaw(enc2utf8(key))
+  as_plain_hex(openssl::sha256(utf8_bytes, key = key_bytes))
 }
 
 # Inspect git metadata for a project directory safely

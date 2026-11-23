@@ -16,21 +16,33 @@ as_json_array <- function(x) {
   unname(as.list(x))
 }
 
-# Hash a vector of project-relative or absolute paths into sorted artifact records
-hash_artifact_paths <- function(paths, root) {
+# Hash a vector of project-relative or confined paths into sorted artifact records
+hash_artifact_paths <- function(paths, root, arg = "artifact") {
   if (is.null(paths) || length(paths) == 0L) {
     return(list())
   }
+  real_root <- canonical_real_dir(root)
+
+  # Validate every supplied path stays strictly confined within project root
   resolved <- vapply(paths, function(p) {
-    if (fs::is_absolute_path(p)) as.character(fs::path_norm(p)) else as.character(fs::path_norm(file.path(root, p)))
+    assert_confined_path(p, root = real_root, must_exist = TRUE, arg = arg)
   }, character(1L), USE.NAMES = FALSE)
 
-  # Expand any directories recursively into files
+  # Expand any directories recursively into regular files strictly inside root
   expanded <- character()
   for (rp in resolved) {
     if (fs::dir_exists(rp)) {
-      subfiles <- as.character(fs::dir_ls(rp, recurse = TRUE, type = "file"))
-      expanded <- c(expanded, subfiles)
+      subfiles <- as.character(fs::dir_ls(rp, recurse = TRUE, type = c("file", "symlink"), fail = FALSE))
+      for (sf in subfiles) {
+        if (!is_confined_existing_path(sf, real_root)) {
+          cli::cli_abort(
+            "Symlink escaping project root {.path {root}} rejected in {.arg {arg}}: {.path {sf}}."
+          )
+        }
+        if (fs::file_exists(sf) && !fs::dir_exists(sf)) {
+          expanded <- c(expanded, canonical_real_dir(sf))
+        }
+      }
     } else if (fs::file_exists(rp)) {
       expanded <- c(expanded, rp)
     } else {
@@ -42,7 +54,10 @@ hash_artifact_paths <- function(paths, root) {
     return(list())
   }
 
-  rels <- rel_path(expanded, root)
+  rels <- rel_path(expanded, real_root)
+  for (rl in rels) {
+    assert_safe_manifest_rel_path(rl, arg = arg)
+  }
   ord <- order(rels)
   expanded <- expanded[ord]
   rels <- rels[ord]
@@ -71,26 +86,37 @@ normalize_tolerances <- function(tolerances = NULL) {
     cli::cli_abort("{.arg tolerances} must be a list (e.g., `list(abs_tol = 1e-4, rel_tol = 1e-3)` or `list(default = ..., files = ...)`).")
   }
 
+  parse_tol_pair <- function(x, fallback_abs = 0, fallback_rel = 0) {
+    a <- as.numeric(x$abs_tol %||% x$atol %||% fallback_abs)
+    r <- as.numeric(x$rel_tol %||% x$rtol %||% fallback_rel)
+    if (length(a) != 1L || is.na(a) || !is.finite(a) || a < 0) {
+      cli::cli_abort("Absolute tolerance ({.arg abs_tol}/{.arg atol}) must be a finite non-negative number.")
+    }
+    if (length(r) != 1L || is.na(r) || !is.finite(r) || r < 0) {
+      cli::cli_abort("Relative tolerance ({.arg rel_tol}/{.arg rtol}) must be a finite non-negative number.")
+    }
+    list(abs_tol = a, rel_tol = r)
+  }
+
   if (!is.null(tolerances$default) || !is.null(tolerances$files)) {
     if (!is.null(tolerances$default)) {
-      default_tol$abs_tol <- as.numeric(tolerances$default$abs_tol %||% 0)
-      default_tol$rel_tol <- as.numeric(tolerances$default$rel_tol %||% 0)
+      default_tol <- parse_tol_pair(tolerances$default)
     }
     if (!is.null(tolerances$files) && length(tolerances$files) > 0L) {
       ft <- list()
       for (nm in sort(names(tolerances$files))) {
-        entry <- tolerances$files[[nm]]
-        ft[[nm]] <- list(
-          abs_tol = as.numeric(entry$abs_tol %||% default_tol$abs_tol),
-          rel_tol = as.numeric(entry$rel_tol %||% default_tol$rel_tol)
+        assert_safe_manifest_rel_path(nm, arg = "tolerances$files")
+        ft[[nm]] <- parse_tol_pair(
+          tolerances$files[[nm]],
+          fallback_abs = default_tol$abs_tol,
+          fallback_rel = default_tol$rel_tol
         )
       }
       file_tols <- ft
     }
   } else {
-    # Shorthand: list(abs_tol = ..., rel_tol = ...)
-    default_tol$abs_tol <- as.numeric(tolerances$abs_tol %||% 0)
-    default_tol$rel_tol <- as.numeric(tolerances$rel_tol %||% 0)
+    # Shorthand: list(abs_tol = ..., rel_tol = ...) or list(atol = ..., rtol = ...)
+    default_tol <- parse_tol_pair(tolerances)
   }
 
   list(default = default_tol, files = as_json_map(file_tols))
@@ -188,7 +214,7 @@ create_capsule_manifest <- function(path = ".",
   sc <- if (is.null(scan)) scan_project(root) else as_rcapsule_scan(scan)
 
   # Resolve output relative paths first so auto-discovered scripts/inputs exclude outputs
-  output_records <- hash_artifact_paths(outputs, root)
+  output_records <- hash_artifact_paths(outputs, root, arg = "outputs")
   output_rels <- vapply(output_records, `[[`, character(1L), "path")
 
   # Auto-discover container definitions if not explicitly supplied
@@ -201,7 +227,7 @@ create_capsule_manifest <- function(path = ".",
     cand_cont <- setdiff(cand_cont, output_rels)
     containers <- cand_cont
   }
-  container_records <- hash_artifact_paths(containers, root)
+  container_records <- hash_artifact_paths(containers, root, arg = "containers")
   container_rels <- vapply(container_records, `[[`, character(1L), "path")
 
   # Auto-discover scripts & project config if not explicitly supplied
@@ -214,8 +240,8 @@ create_capsule_manifest <- function(path = ".",
     cand_scripts <- cand_scripts[!grepl("^renv/", cand_scripts)]
     scripts <- cand_scripts
   }
-  script_records <- hash_artifact_paths(scripts, root)
-  input_records <- hash_artifact_paths(inputs, root)
+  script_records <- hash_artifact_paths(scripts, root, arg = "scripts")
+  input_records <- hash_artifact_paths(inputs, root, arg = "inputs")
 
   # Embed optional compact snapshots for numeric-tolerance outputs
   snapshots <- list()

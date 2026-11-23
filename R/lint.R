@@ -208,22 +208,27 @@ lint_dockerfile_lines <- function(lines) {
 
   for (ins in insts) {
     if (ins$cmd == "RUN") {
-      if (grepl("apt-get\\s+install", ins$args)) {
-        if (!grepl("rm\\s+-rf\\s+/var/lib/apt/lists/\\*", ins$args)) {
+      if (grepl("apt-get\\s+install", ins$args, perl = TRUE)) {
+        if (!grepl("rm\\s+-rf\\s+/var/lib/apt/lists/\\*", ins$args, perl = TRUE)) {
           add_issue("DF002", "warning", ins$line,
             "apt-get install without cleaning /var/lib/apt/lists/* bloats image layers.",
             "Append '&& rm -rf /var/lib/apt/lists/*' in the same RUN layer.")
         }
-        if (!grepl("--no-install-recommends", ins$args)) {
+        if (!grepl("--no-install-recommends", ins$args, fixed = TRUE)) {
           add_issue("DF003", "warning", ins$line,
             "apt-get install missing '--no-install-recommends'.",
             "Pass '--no-install-recommends' to keep images lean and deterministic.")
         }
       }
-      if (grepl("pip3?\\s+install", ins$args) && !grepl("--no-cache-dir", ins$args)) {
+      if (grepl("pip3?\\s+install", ins$args, perl = TRUE) && !grepl("--no-cache-dir", ins$args, fixed = TRUE)) {
         add_issue("DF010", "warning", ins$line,
           "pip install missing '--no-cache-dir'.",
           "Pass '--no-cache-dir' to avoid caching wheel archives inside image layers.")
+      }
+      if (grepl("\\b(curl|wget)\\b[^\\n]*\\|\\s*(sudo\\s+)?(ba|da|z|k)?sh\\b", ins$args, ignore.case = TRUE, perl = TRUE)) {
+        add_issue("DF011", "error", ins$line,
+          "Piping remote script directly to shell ('curl|sh' / 'wget|bash') is an unsafe supply-chain anti-pattern.",
+          "Download a pinned versioned release archive, verify its SHA-256 checksum, and then install.")
       }
       if (grepl("renv::restore", ins$args, fixed = TRUE) && is.na(renv_restore_line)) {
         renv_restore_line <- ins$line
@@ -247,7 +252,8 @@ lint_dockerfile_lines <- function(lines) {
     }
 
     if (ins$cmd %in% c("ENV", "ARG")) {
-      if (grepl("\\b(PASSWORD|PASSWD|SECRET|API_KEY|ACCESS_KEY|PRIVATE_KEY|TOKEN)\\s*=\\s*[^$\\s'\"]+", ins$args, ignore.case = TRUE, perl = TRUE)) {
+      secret_kv_pat <- "\\b([A-Z0-9_]*(?:PASSWORD|PASSWD|SECRET|API_KEY|ACCESS_KEY|PRIVATE_KEY|SIGNING_KEY|TOKEN|PAT)|DATABASE_URL)\\s*(?:=|\\s+)\\s*['\"]?([^$\\s'\"]+)['\"]?"
+      if (grepl(secret_kv_pat, ins$args, ignore.case = TRUE, perl = TRUE)) {
         add_issue("DF008", "warning", ins$line,
           paste0("Potential hardcoded secret detected in ", ins$cmd, " instruction."),
           "Pass secrets at runtime via environment variables or Docker secrets, never baked into images.")
@@ -309,7 +315,7 @@ lint_compose_lines <- function(lines) {
   }
 
   content <- paste(lines, collapse = "\n")
-  cfg <- tryCatch(yaml::yaml.load(content), error = function(e) e)
+  cfg <- tryCatch(safe_yaml_load(content), error = function(e) e)
   if (inherits(cfg, "error") || !is.list(cfg)) {
     add_issue("DC001", "error", 1L,
       paste0("Invalid YAML syntax: ", if (inherits(cfg, "error")) conditionMessage(cfg) else "not a mapping"),
@@ -375,8 +381,9 @@ lint_compose_lines <- function(lines) {
       } else {
         as.character(unlist(env_entries))
       }
+      secret_env_pat <- "^([A-Z0-9_]*(?:PASSWORD|PASSWD|SECRET|API_KEY|ACCESS_KEY|PRIVATE_KEY|SIGNING_KEY|TOKEN|PAT)|DATABASE_URL)\\s*=\\s*['\"]?[^$\\s'\"]+"
       for (es in env_strs) {
-        if (grepl("^(PASSWORD|PASSWD|SECRET|API_KEY|ACCESS_KEY|PRIVATE_KEY|TOKEN)\\s*=\\s*[^$\\s]+", es, ignore.case = TRUE)) {
+        if (grepl(secret_env_pat, es, ignore.case = TRUE, perl = TRUE)) {
           add_issue("DC006", "warning", svc_line,
             paste0("Service '", svc_name, "' may contain a hardcoded secret in environment."),
             "Use '${VAR}' environment substitution or Docker secrets instead of literal credentials.")
@@ -390,6 +397,26 @@ lint_compose_lines <- function(lines) {
       add_issue("DC007", "warning", svc_line,
         paste0("Service '", svc_name, "' missing 'no-new-privileges:true' security option."),
         "Add 'security_opt: [\"no-new-privileges:true\"]' to harden the container.")
+    }
+
+    # DC008: Host network/PID/IPC namespace sharing
+    if (identical(tolower(as.character(svc$network_mode %||% "")), "host") ||
+      identical(tolower(as.character(svc$pid %||% "")), "host") ||
+      identical(tolower(as.character(svc$ipc %||% "")), "host")) {
+      add_issue("DC008", "error", svc_line,
+        paste0("Service '", svc_name, "' shares host namespace (network_mode/pid/ipc: host)."),
+        "Use an isolated bridge network rather than sharing host namespaces.")
+    }
+
+    # DC009: Dangerous host mounts (docker.sock or host root/etc)
+    vols <- as.character(unlist(svc$volumes %||% character()))
+    for (v in vols) {
+      host_src <- strsplit(v, ":", fixed = TRUE)[[1L]][[1L]]
+      if (grepl("docker\\.sock$", host_src, ignore.case = TRUE) || host_src %in% c("/", "/etc", "/root")) {
+        add_issue("DC009", "warning", svc_line,
+          paste0("Service '", svc_name, "' mounts sensitive host path '", host_src, "'."),
+          "Avoid mounting Docker socket or sensitive host system directories into containers.")
+      }
     }
   }
 
@@ -441,15 +468,27 @@ lint_apptainer_lines <- function(lines) {
   if (!is.null(sections[["%post"]])) {
     post_text <- paste(sections[["%post"]]$body, collapse = "\n")
     post_line <- sections[["%post"]]$line
-    if (grepl("apt-get\\s+install", post_text) && !grepl("rm\\s+-rf\\s+/var/lib/apt/lists/\\*", post_text)) {
-      add_issue("AP003", "warning", post_line,
-        "%post installs apt packages without cleaning /var/lib/apt/lists/*.",
-        "Add 'rm -rf /var/lib/apt/lists/*' at the end of the apt-get command.")
+    if (grepl("apt-get\\s+install", post_text, perl = TRUE)) {
+      if (!grepl("rm\\s+-rf\\s+/var/lib/apt/lists/\\*", post_text, perl = TRUE)) {
+        add_issue("AP003", "warning", post_line,
+          "%post installs apt packages without cleaning /var/lib/apt/lists/*.",
+          "Add 'rm -rf /var/lib/apt/lists/*' at the end of the apt-get command.")
+      }
+      if (!grepl("--no-install-recommends", post_text, fixed = TRUE)) {
+        add_issue("AP008", "warning", post_line,
+          "%post apt-get install missing '--no-install-recommends'.",
+          "Pass '--no-install-recommends' to keep Apptainer SIF images lean and deterministic.")
+      }
     }
-    if (!grepl("set\\s+-[a-zA-Z]*e", post_text)) {
+    if (!grepl("set\\s+-[a-zA-Z]*e", post_text, perl = TRUE)) {
       add_issue("AP004", "warning", post_line,
         "%post lacks 'set -e' / 'set -euo pipefail' fail-fast guard.",
         "Add 'set -euo pipefail' at the start of %post so build errors abort cleanly.")
+    }
+    if (grepl("\\b(curl|wget)\\b[^\\n]*\\|\\s*(sudo\\s+)?(ba|da|z|k)?sh\\b", post_text, ignore.case = TRUE, perl = TRUE)) {
+      add_issue("AP007", "error", post_line,
+        "%post pipes remote script directly to shell ('curl|sh' / 'wget|bash').",
+        "Download a pinned archive and verify its checksum before installing.")
     }
   }
 

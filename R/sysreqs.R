@@ -208,7 +208,7 @@ resolve_sysreqs <- function(packages = character(),
     }
   }
 
-  # 3. User custom overrides
+  # 3. User custom overrides (strictly validated against shell/apt injection)
   if (!is.null(custom_sysreqs)) {
     if (!is.list(custom_sysreqs) || is.null(names(custom_sysreqs))) {
       cli::cli_abort("{.arg custom_sysreqs} must be a named list mapping package names to apt packages.")
@@ -216,6 +216,7 @@ resolve_sysreqs <- function(packages = character(),
     for (pkg in names(custom_sysreqs)) {
       aps <- as.character(custom_sysreqs[[pkg]])
       aps <- aps[!is.na(aps) & nzchar(aps)]
+      validate_apt_package_names(aps, arg = paste0("custom_sysreqs$", pkg))
       for (ap in aps) {
         add_req(ap, "build", pkg, "custom")
         add_req(ap, "runtime", pkg, "custom")
