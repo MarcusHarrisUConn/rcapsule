@@ -78,6 +78,40 @@ validate_version_string <- function(x, arg = "version") {
   x
 }
 
+# Validate Docker / OCI target platform (e.g., "linux/amd64", "linux/arm64")
+validate_container_platform <- function(x, arg = "platform") {
+  if (is.null(x)) return(NULL)
+  assert_no_control_chars(x, arg = arg)
+  valid_platforms <- c("linux/amd64", "linux/arm64", "linux/arm/v7")
+  if (!(x %in% valid_platforms)) {
+    cli::cli_abort(
+      "{.arg {arg}} must be NULL or one of {.val {valid_platforms}}, not {.val {x}}."
+    )
+  }
+  x
+}
+
+# Validate Posit Package Manager Linux distro codename
+validate_ppm_distro <- function(x, arg = "ppm_distro") {
+  assert_no_control_chars(x, arg = arg)
+  valid_distros <- c("jammy", "noble", "focal", "bookworm", "bullseye")
+  if (!(x %in% valid_distros)) {
+    cli::cli_abort(
+      "{.arg {arg}} must be one of {.val {valid_distros}}, not {.val {x}}."
+    )
+  }
+  x
+}
+
+# Validate snapshot date YYYY-MM-DD for Posit Package Manager
+validate_snapshot_date <- function(x, arg = "ppm_date") {
+  assert_no_control_chars(x, arg = arg)
+  if (!grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", x, perl = TRUE)) {
+    cli::cli_abort("{.arg {arg}} must be an ISO date 'YYYY-MM-DD', not {.val {x}}.")
+  }
+  x
+}
+
 # Validate Docker / OCI image reference (no whitespace, newlines, or shell metacharacters)
 validate_docker_image_ref <- function(x, arg = "base_image") {
   assert_no_control_chars(x, arg = arg)

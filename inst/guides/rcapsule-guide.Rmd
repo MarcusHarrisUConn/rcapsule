@@ -1,0 +1,190 @@
+---
+title: "rcapsule Field Guide: Reproducibility Capsules & Multi-Target Containerization for R"
+subtitle: "From Static Project Scanning to Cryptographically Verified Journal Supplements"
+author: "Marcus Harris"
+date: "2026"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    highlight: tango
+geometry: margin=1in
+fontsize: 11pt
+urlcolor: blue
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  echo = TRUE,
+  eval = TRUE
+)
+```
+
+# Introduction
+
+Computational reproducibility in R routinely breaks at the boundary between the
+R library (`renv.lock`) and the host operating system. Native C/C++/Fortran
+libraries (`GDAL`, `GEOS`, `PROJ`, `libxml2`, `libharfbuzz`), Bayesian and
+automatic-differentiation compilers (`CmdStan`, `TMB`, `RTMB`, `JAGS`), Python
+virtual environments (`reticulate`), `Quarto` publishing binaries, and `LaTeX`
+distributions all drift across machines and over time.
+
+`rcapsule` solves this full-stack reproducibility problem with four integrated
+pillars:
+
+1. **Full-Stack Project & Toolchain Scanner (`scan_project()`)**: Recursively
+   inspects R scripts, `Quarto`/`R Markdown` code chunks and YAML frontmatter,
+   `DESCRIPTION`, `renv.lock`, `_targets.R`, `here::here()` roots, Shiny apps,
+   native `src/` code, and `.Rprofile` portability hazards.
+2. **Multi-Target Container Compiler & Linter (`compile_dockerfile()`,
+   `compile_compose()`, `compile_apptainer()`, `lint_container_spec()`)**:
+   Compiles pinned, layer-cached multi-stage Dockerfiles (with optional
+   `--platform` cross-architecture pinning and Posit Package Manager binary
+   repositories), production multi-service `docker-compose.yml` stacks, and
+   HPC-compatible Apptainer `.def` recipes.
+3. **Cryptographic Provenance Manifests & Cross-Run Diffing
+   (`create_capsule_manifest()`, `sign_manifest()`, `verify_manifest_integrity()`,
+   `diff_capsules()`)**: Produces canonical UTF-8 `capsule.json` manifests
+   recording environment digests, Git state, RNG seeds, `SHA-256` artifact
+   hashes, and optional keyed `HMAC-SHA256` signatures.
+4. **Isolated Reproducibility Auditor, Certificates & Supplement Bundler
+   (`verify_capsule()`, `compare_artifacts()`, `render_certificate()`,
+   `export_capsule_bundle()`, `build_capsule()`)**: Re-executes pipelines in an
+   isolated sandbox (scrubbing ambient host credentials) or live Docker
+   container, verifies outputs bit-for-bit or within explicit numeric tolerances
+   (`atol`/`rtol`), renders journal-ready Markdown/HTML5 certificates, and
+   exports zip-slip-safe peer-review supplement archives.
+
+# Architecture Overview
+
+| Stage | Primary Functions | Key Output |
+| :--- | :--- | :--- |
+| 1. Scan | `scan_project()`, `sysreqs_db()`, `resolve_sysreqs()` | `rcapsule_scan` |
+| 2. Compile & Lint | `compile_dockerfile()`, `compile_compose()`, `compile_apptainer()`, `lint_container_spec()` | `Dockerfile`, `docker-compose.yml`, `Apptainer.def`, `rcapsule_lint` |
+| 3. Provenance & Diff | `create_capsule_manifest()`, `sign_manifest()`, `verify_manifest_integrity()`, `diff_capsules()` | `capsule.json`, `rcapsule_diff` |
+| 4. Audit & Export | `verify_capsule()`, `compare_artifacts()`, `render_certificate()`, `export_capsule_bundle()` | Certificates (`.md`, `.html`), `.zip` supplement |
+
+# Live End-to-End Walkthrough
+
+The following code executes live during PDF compilation, demonstrating a full
+scan, container compilation, static lint, signed manifest creation, isolated
+verification, cross-run diffing, and journal supplement export inside a clean
+temporary directory.
+
+```{r live-walkthrough}
+library(rcapsule)
+
+demo <- tempfile("rcapsule_guide_demo_")
+dir.create(file.path(demo, "data"), recursive = TRUE)
+dir.create(file.path(demo, "results"), recursive = TRUE)
+
+write.csv(
+  data.frame(group = c("ctrl", "ctrl", "trt", "trt"), y = c(4.1, 4.5, 6.2, 6.6)),
+  file.path(demo, "data", "experiment.csv"),
+  row.names = FALSE
+)
+
+writeLines(
+  c(
+    "library(jsonlite)",
+    "dat <- read.csv('data/experiment.csv', stringsAsFactors = FALSE)",
+    "draws <- rnorm(200, mean = mean(dat$y), sd = 0.2)",
+    "tbl <- data.frame(",
+    "  stat = c('obs_mean', 'mc_mean', 'mc_sd'),",
+    "  val  = c(mean(dat$y), mean(draws), sd(draws)),",
+    "  stringsAsFactors = FALSE",
+    ")",
+    "dir.create('results', showWarnings = FALSE)",
+    "write.csv(tbl, 'results/summary.csv', row.names = FALSE)",
+    "write_json(list(n = nrow(dat), mc_mean = mean(draws)), 'results/metrics.json', auto_unbox = TRUE)"
+  ),
+  file.path(demo, "run.R")
+)
+
+invisible(callr::rscript(
+  script = NULL,
+  cmdargs = c("-e", "set.seed(2026L); source('run.R')"),
+  wd = demo,
+  fail_on_status = TRUE,
+  show = FALSE
+))
+
+bundle <- build_capsule(
+  path        = demo,
+  targets     = c("dockerfile", "compose", "apptainer"),
+  inputs      = "data/experiment.csv",
+  outputs     = c("results/summary.csv", "results/metrics.json"),
+  seed        = 2026L,
+  tolerances  = list(atol = 1e-4, rtol = 1e-4),
+  key         = "field-guide-hmac-key",
+  platform    = "linux/amd64",
+  use_ppm     = TRUE,
+  write       = TRUE,
+  lint        = TRUE,
+  verify      = TRUE,
+  certificate = TRUE
+)
+
+bundle$verification$status
+vapply(bundle$lint, function(x) x$passed, logical(1))
+```
+
+# Multi-Architecture & Posit Package Manager Builds
+
+When authoring on Apple Silicon (`arm64`) laptops and deploying to `x86_64`
+university HPC or cloud servers, pin `platform = "linux/amd64"` and keep
+`use_ppm = TRUE` for fast, pinned binary package installs:
+
+```{r ppm-check}
+grep("^(FROM|    R_REPOS=)", bundle$specs$dockerfile$lines, value = TRUE)
+```
+
+# Security & Supply-Chain Controls
+
+`rcapsule` enforces defense-in-depth across untrusted repositories:
+
+- **Strict Container Input Allowlists**: Rejects shell metacharacters, newlines,
+  `:latest` base images, `USER root`, unsafe host mounts (`/var/run/docker.sock`,
+  `/`), and YAML `!expr` execution (`eval.expr = FALSE`).
+- **Path-Traversal & Symlink-Escape Confinement**: Rejects `..`, external
+  absolute paths, and external/dangling symlinks in scanning, manifest creation,
+  sandbox staging, verification, and ZIP bundle export (zip-slip safe).
+- **Sandbox Secret Scrubbing**: Automatically unsets ambient host credentials
+  (`AWS_*`, `GITHUB_TOKEN`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `*_SECRET*`,
+  `*_TOKEN*`, etc.) prior to launching `callr::rscript()`.
+- **Constant-Time Crypto & CSP Certificates**: Verifies digests and `HMAC-SHA256`
+  signatures in constant time over canonical UTF-8 JSON, escapes all dynamic
+  strings in HTML/Markdown certificates, and sets a strict
+  `Content-Security-Policy` header (`default-src 'none'`).
+
+# Exporting a Journal Peer-Review Supplement
+
+```{r export-demo}
+zip_out <- file.path(tempdir(), "field_guide_supplement.zip")
+exported <- export_capsule_bundle(
+  path         = demo,
+  output       = zip_out,
+  format       = "zip",
+  manifest     = bundle$manifest,
+  verification = bundle$verification,
+  platform     = "linux/amd64",
+  overwrite    = TRUE
+)
+exported$files
+unlink(c(demo, zip_out), recursive = TRUE)
+```
+
+# Summary Checklist for Authors
+
+1. Run `scan_project()` and eliminate any `.Rprofile` portability hazards.
+2. Compile and lint targets (`build_capsule(..., lint = TRUE)`).
+3. Record inputs, outputs, RNG seeds, and explicit Monte Carlo tolerances
+   (`atol`/`rtol`) in a signed `capsule.json`.
+4. Run `verify_capsule(..., strict_outputs = TRUE)` cleanly in an isolated
+   sandbox or Docker container.
+5. Export the peer-review bundle with `export_capsule_bundle()` and archive both
+   the ZIP supplement and standalone HTML verification certificate alongside
+   your manuscript.

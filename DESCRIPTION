@@ -1,23 +1,27 @@
 Package: rcapsule
 Title: Reproducibility Capsules and Multi-Target Containerization for R
-Version: 0.2.0
+Version: 0.3.0
 Authors@R:
     person("Marcus", "Harris", , "marcus.harris.uconn@gmail.com", role = c("aut", "cre", "cph"))
-Description: Compiles R analysis projects, Quarto manuscripts, R Markdown
-    reports, R packages, and Shiny applications into lean, layer-cached
-    Dockerfiles, multi-service 'docker-compose.yml' stacks, and HPC-ready
-    Apptainer definitions. Resolves full-stack R package, OS system library,
-    and scientific toolchain dependencies ('CmdStan', 'TMB'/'RTMB', 'JAGS',
-    'C++', 'Rust', 'Python'/'reticulate', 'Quarto', and 'LaTeX'), records
-    cryptographically verifiable provenance manifests ('capsule.json') with
-    SHA-256 artifact hashes and optional HMAC-SHA256 signatures, and executes
-    isolated reproducibility audits with exact and numeric-tolerance
-    comparators to produce journal-ready verification certificates.
+Description: Compiles R analysis projects, 'Quarto' manuscripts, 'R Markdown'
+    reports, R packages, 'targets' pipelines, and 'Shiny' applications into
+    lean, layer-cached 'Docker' files, multi-service 'docker-compose.yml'
+    stacks, and HPC-ready 'Apptainer' definitions. Resolves full-stack R
+    package, OS system library, and scientific toolchain dependencies
+    ('CmdStan', 'TMB', 'RTMB', 'JAGS', 'C++', 'Rust', 'Python', 'reticulate',
+    'Quarto', and 'LaTeX'), records cryptographically verifiable provenance
+    manifests ('capsule.json') with 'SHA-256' artifact hashes and optional
+    'HMAC-SHA256' signatures, compares runs across machines, exports
+    journal-ready peer-review bundles, and executes isolated reproducibility
+    audits with exact and numeric-tolerance comparators to produce
+    verification certificates.
 License: MIT + file LICENSE
-URL: https://github.com/MarcusHarrisUConn/rcapsule
+URL: https://github.com/MarcusHarrisUConn/rcapsule, https://marcusharrisphd.com/rcapsule/
 BugReports: https://github.com/MarcusHarrisUConn/rcapsule/issues
 Encoding: UTF-8
+Language: en-US
 Roxygen: list(markdown = TRUE)
+Config/roxygen2/version: 8.1.0
 Depends:
     R (>= 4.1.0)
 Imports:
@@ -34,7 +38,8 @@ Imports:
     tibble,
     tools,
     utils,
-    yaml
+    yaml,
+    zip
 Suggests:
     knitr,
     quarto,
@@ -45,4 +50,3 @@ Suggests:
     withr
 VignetteBuilder: knitr
 Config/testthat/edition: 3
-Config/roxygen2/version: 8.1.0

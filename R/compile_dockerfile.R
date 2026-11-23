@@ -65,8 +65,21 @@ tc_active <- function(scan, name) {
 #' @param r_version Optional R version string overriding `scan$r_version`.
 #' @param base_digest Optional SHA-256 image digest (e.g., `"sha256:..."`)
 #'   appended to `base_image` for immutable image pinning.
-#' @param cran_repo Pinned CRAN or Posit Public Package Manager repository URL
-#'   used when `renv.lock` is not present.
+#' @param platform Optional target container platform (`"linux/amd64"`,
+#'   `"linux/arm64"`, or `NULL` for host default). Useful when building
+#'   `x86_64` HPC or cloud images on Apple Silicon (`arm64`) hosts.
+#' @param cran_repo Optional custom pinned CRAN or Posit Public Package Manager
+#'   repository URL used when `renv.lock` is not present. If `NULL` (default),
+#'   automatically selects a pinned Posit Package Manager URL controlled by
+#'   `use_ppm`, `ppm_distro`, and `ppm_date`.
+#' @param use_ppm Logical; if `TRUE` (default) and `cran_repo` is `NULL`, uses
+#'   Posit Public Package Manager Linux binary repositories for dramatically
+#'   faster reproducible container builds.
+#' @param ppm_distro Linux distribution codename for Posit Package Manager
+#'   binaries (`"jammy"`, `"noble"`, `"focal"`, `"bookworm"`, or `"bullseye"`).
+#'   Defaults to `"jammy"` (Ubuntu 22.04 LTS matching Rocker).
+#' @param ppm_date Pinned Posit Package Manager snapshot date (`"YYYY-MM-DD"`).
+#'   Defaults to `"2026-01-15"`.
 #' @param quarto_version Pinned Quarto CLI version installed when Quarto is
 #'   detected. Defaults to `"1.5.57"`.
 #' @param cmdstan_version Pinned CmdStan version installed when `cmdstanr` or
@@ -87,8 +100,8 @@ tc_active <- function(scan, name) {
 #'   untagged base images.
 #'
 #' @return An S3 object of class `c("rcapsule_dockerfile", "rcapsule_spec")`
-#'   with fields `content`, `lines`, `base_image`, `stages`, `project_type`,
-#'   `path`, and `scan`.
+#'   with fields `content`, `lines`, `base_image`, `platform`, `cran_repo`,
+#'   `use_ppm`, `stages`, `project_type`, `path`, and `scan`.
 #' @export
 #' @examples
 #' tmp <- tempfile("rcapsule_df_")
@@ -102,7 +115,11 @@ compile_dockerfile <- function(scan,
                                base_image = NULL,
                                r_version = NULL,
                                base_digest = NULL,
-                               cran_repo = "https://packagemanager.posit.co/cran/2026-01-15",
+                               platform = NULL,
+                               cran_repo = NULL,
+                               use_ppm = TRUE,
+                               ppm_distro = "jammy",
+                               ppm_date = "2026-01-15",
                                quarto_version = "1.5.57",
                                cmdstan_version = "2.35.0",
                                user = "capsule",
@@ -115,6 +132,16 @@ compile_dockerfile <- function(scan,
   scan <- as_rcapsule_scan(scan)
   r_ver <- validate_version_string(as.character(r_version %||% scan$r_version), arg = "r_version")
   base_ref <- format_base_image_ref(base_image, r_ver, base_digest, allow_unpinned = allow_unpinned)
+  platform <- validate_container_platform(platform, arg = "platform")
+  ppm_distro <- validate_ppm_distro(ppm_distro, arg = "ppm_distro")
+  ppm_date <- validate_snapshot_date(ppm_date, arg = "ppm_date")
+  if (is.null(cran_repo)) {
+    cran_repo <- if (isTRUE(use_ppm)) {
+      paste0("https://packagemanager.posit.co/cran/__linux__/", ppm_distro, "/", ppm_date)
+    } else {
+      paste0("https://packagemanager.posit.co/cran/", ppm_date)
+    }
+  }
   validate_cran_repo_url(cran_repo, arg = "cran_repo")
   validate_version_string(quarto_version, arg = "quarto_version")
   validate_version_string(cmdstan_version, arg = "cmdstan_version")
@@ -186,10 +213,11 @@ compile_dockerfile <- function(scan,
   )
 
   # --- Stage 1: Builder (or single-stage) ---
+  from_prefix <- if (!is.null(platform)) paste0("FROM --platform=", platform, " ") else "FROM "
   if (isTRUE(multi_stage)) {
-    lines <- c(lines, paste0("FROM ", base_ref, " AS builder"))
+    lines <- c(lines, paste0(from_prefix, base_ref, " AS builder"))
   } else {
-    lines <- c(lines, paste0("FROM ", base_ref))
+    lines <- c(lines, paste0(from_prefix, base_ref))
   }
 
   lines <- c(
@@ -340,7 +368,7 @@ compile_dockerfile <- function(scan,
       "# =============================================================================",
       "# Runtime stage: lean non-root execution image",
       "# =============================================================================",
-      paste0("FROM ", base_ref, " AS runtime"),
+      paste0(from_prefix, base_ref, " AS runtime"),
       ""
     )
   } else {
@@ -499,7 +527,9 @@ compile_dockerfile <- function(scan,
   } else if (identical(scan$project_type, "package")) {
     "CMD [\"R\", \"--no-save\"]"
   } else {
-    if (!is.null(ep)) {
+    if (!is.null(ep) && identical(tolower(basename(ep)), "_targets.r")) {
+      "CMD [\"Rscript\", \"-e\", \"targets::tar_make()\"]"
+    } else if (!is.null(ep)) {
       paste0("CMD [\"Rscript\", \"", ep, "\"]")
     } else {
       "CMD [\"R\", \"--no-save\"]"
@@ -524,6 +554,9 @@ compile_dockerfile <- function(scan,
       content = content,
       lines = lines,
       base_image = base_ref,
+      platform = platform,
+      cran_repo = cran_repo,
+      use_ppm = isTRUE(use_ppm),
       stages = if (isTRUE(multi_stage)) c("builder", "runtime") else "single",
       project_type = scan$project_type,
       path = written_path,

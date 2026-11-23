@@ -32,6 +32,11 @@
 #'   (default) or `"docker"`.
 #' @param custom_sysreqs Optional custom system dependency overrides forwarded
 #'   to [scan_project()].
+#' @param platform Optional target container platform (`"linux/amd64"`,
+#'   `"linux/arm64"`, or `NULL`) forwarded to [compile_dockerfile()] and
+#'   [compile_compose()].
+#' @param use_ppm Logical; if `TRUE` (default), enables Posit Package Manager
+#'   Linux binary repositories in [compile_dockerfile()].
 #' @param metadata Optional metadata list forwarded to
 #'   [create_capsule_manifest()].
 #'
@@ -63,6 +68,8 @@ build_capsule <- function(path = ".",
                           certificate = FALSE,
                           runner = c("sandbox", "docker"),
                           custom_sysreqs = NULL,
+                          platform = NULL,
+                          use_ppm = TRUE,
                           metadata = list()) {
   root <- normalize_project_path(path, must_exist = TRUE)
   runner <- match.arg(runner)
@@ -78,12 +85,18 @@ build_capsule <- function(path = ".",
 
   if ("dockerfile" %in% targets) {
     out_p <- if (isTRUE(write)) file.path(root, "Dockerfile") else NULL
-    specs$dockerfile <- compile_dockerfile(scan, output = out_p, entrypoint = entrypoint)
+    specs$dockerfile <- compile_dockerfile(
+      scan,
+      output = out_p,
+      entrypoint = entrypoint,
+      platform = platform,
+      use_ppm = use_ppm
+    )
     if (!is.null(out_p)) container_paths <- c(container_paths, "Dockerfile")
   }
   if ("compose" %in% targets) {
     out_p <- if (isTRUE(write)) file.path(root, "docker-compose.yml") else NULL
-    specs$compose <- compile_compose(scan, output = out_p)
+    specs$compose <- compile_compose(scan, output = out_p, platform = platform)
     if (!is.null(out_p)) container_paths <- c(container_paths, "docker-compose.yml")
   }
   if ("apptainer" %in% targets) {

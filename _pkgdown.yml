@@ -1,0 +1,96 @@
+url: https://marcusharrisphd.com/rcapsule/
+
+template:
+  bootstrap: 5
+  bootswatch: flatly
+  bslib:
+    primary: "#264653"
+    secondary: "#6e7f8d"
+    base_font: {google: "Source Sans Pro"}
+    heading_font: {google: "Source Serif 4"}
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, pdfs, news]
+    right: [search, github]
+  components:
+    pdfs:
+      text: PDFs
+      menu:
+        - text: Reference Manual (PDF)
+          href: rcapsule-manual.pdf
+        - text: Reproducibility Field Guide (PDF)
+          href: rcapsule-guide.pdf
+
+home:
+  title: "rcapsule: Reproducibility Capsules & Multi-Target Containerization for R"
+  description: >
+    Compile any R project, Quarto manuscript, targets pipeline, or Shiny app
+    into lean Docker/Apptainer containers with cryptographic reproducibility
+    verification.
+
+articles:
+  - title: "Core Workflows"
+    navbar: ~
+    contents:
+      - getting-started
+      - multi-target-containers
+      - journal-submission-workflow
+      - troubleshooting-reproducibility
+
+reference:
+  - title: "End-to-End Orchestration & Supplement Export"
+    desc: >
+      High-level workflows for building complete reproducibility capsules and
+      exporting zip-slip-safe journal peer-review supplements.
+    contents:
+      - build_capsule
+      - export_capsule_bundle
+
+  - title: "Full-Stack Project & Toolchain Scanner"
+    desc: >
+      Static AST and project scanners resolving R packages, OS system libraries,
+      compiled scientific toolchains, .Rprofile hazards, and architecture hints.
+    contents:
+      - scan_project
+      - sysreqs_db
+      - resolve_sysreqs
+
+  - title: "Multi-Target Container Compilers & Static Linter"
+    desc: >
+      Generate and audit pinned, layer-cached Dockerfiles, multi-service
+      docker-compose.yml stacks, and HPC-ready Apptainer recipes.
+    contents:
+      - compile_dockerfile
+      - compile_compose
+      - compile_apptainer
+      - lint_container_spec
+
+  - title: "Cryptographic Provenance Manifests & Cross-Run Diffing"
+    desc: >
+      Create, serialize, sign, verify, and diff tamper-evident capsule.json
+      manifests with SHA-256 hashes and keyed HMAC-SHA256 signatures.
+    contents:
+      - create_capsule_manifest
+      - write_capsule_manifest
+      - read_capsule_manifest
+      - sign_manifest
+      - verify_manifest_integrity
+      - diff_capsules
+
+  - title: "Reproducibility Verification & Certificates"
+    desc: >
+      Execute pipelines in isolated sandboxes or Docker containers, compare
+      outputs with exact and numeric-tolerance comparators, and render
+      publication-ready verification certificates.
+    contents:
+      - verify_capsule
+      - compare_artifacts
+      - render_certificate
+
+  - title: "Runtime Capability Checks"
+    desc: >
+      Detect local Docker daemon and Apptainer/Singularity CLI availability.
+    contents:
+      - docker_available
+      - apptainer_available

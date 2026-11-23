@@ -125,10 +125,21 @@ write_runner_bootstrap <- function(sandbox_dir, entrypoint, seed, rng_kind) {
   }
 
   if (ext == "r") {
-    lines <- c(
-      lines,
-      sprintf("source(%s, local = new.env(parent = globalenv()))", deparse(entrypoint))
-    )
+    if (identical(tolower(basename(entrypoint)), "_targets.r")) {
+      lines <- c(
+        lines,
+        "if (requireNamespace('targets', quietly = TRUE)) {",
+        "  targets::tar_make()",
+        "} else {",
+        sprintf("  source(%s, local = new.env(parent = globalenv()))", deparse(entrypoint)),
+        "}"
+      )
+    } else {
+      lines <- c(
+        lines,
+        sprintf("source(%s, local = new.env(parent = globalenv()))", deparse(entrypoint))
+      )
+    }
   } else if (ext == "qmd") {
     lines <- c(
       lines,

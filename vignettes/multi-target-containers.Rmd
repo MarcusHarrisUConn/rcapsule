@@ -72,7 +72,7 @@ writeLines(c("numpy==1.26.4", "scipy==1.13.0"), file.path(q_dir, "requirements.t
 sc_q <- scan_project(q_dir)
 sc_q
 
-df_q <- compile_dockerfile(sc_q, r_version = "4.4.1")
+df_q <- compile_dockerfile(sc_q, r_version = "4.4.1", platform = "linux/amd64", use_ppm = TRUE)
 lint_container_spec(df_q)
 cat(paste(df_q$lines[1:45], collapse = "\n"))
 ```

@@ -19,6 +19,8 @@ build_capsule(
   certificate = FALSE,
   runner = c("sandbox", "docker"),
   custom_sysreqs = NULL,
+  platform = NULL,
+  use_ppm = TRUE,
   metadata = list()
 )
 }
@@ -60,6 +62,13 @@ Markdown and HTML certificates via \code{\link[=render_certificate]{render_certi
 
 \item{custom_sysreqs}{Optional custom system dependency overrides forwarded
 to \code{\link[=scan_project]{scan_project()}}.}
+
+\item{platform}{Optional target container platform (\code{"linux/amd64"},
+\code{"linux/arm64"}, or \code{NULL}) forwarded to \code{\link[=compile_dockerfile]{compile_dockerfile()}} and
+\code{\link[=compile_compose]{compile_compose()}}.}
+
+\item{use_ppm}{Logical; if \code{TRUE} (default), enables Posit Package Manager
+Linux binary repositories in \code{\link[=compile_dockerfile]{compile_dockerfile()}}.}
 
 \item{metadata}{Optional metadata list forwarded to
 \code{\link[=create_capsule_manifest]{create_capsule_manifest()}}.}

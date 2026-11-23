@@ -1,0 +1,161 @@
+---
+title: "Troubleshooting Reproducibility: Tolerances, .Rprofile Traps, and Cross-Architecture Builds"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Troubleshooting Reproducibility: Tolerances, .Rprofile Traps, and Cross-Architecture Builds}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Overview
+
+Even well-intentioned R projects fail to reproduce in subtle real-world ways.
+This guide covers the four most common failure modes—and how `rcapsule`
+detects and resolves each one:
+
+1. **Hidden `.Rprofile` portability hazards** (machine-specific `.libPaths()`,
+   `setwd()`, or hardcoded API keys).
+2. **Apple Silicon (`linux/arm64`) vs. HPC/Cloud (`linux/amd64`) architecture
+   mismatches** and slow source-package builds.
+3. **Monte Carlo and BLAS floating-point drift** requiring explicit per-file
+   numeric tolerances (`atol`/`rtol`).
+4. **Non-deterministic binary/plot metadata** (embedded timestamps in PNG/PDF
+   graphics) and unexpected extra artifacts.
+
+## 1. Catching `.Rprofile` Portability Traps and `targets` / `here` Projects
+
+Local `.Rprofile` files often silently break containers when copied to another
+machine. `scan_project()` inspects `.Rprofile` (ignoring benign
+`source("renv/activate.R")` lines) and surfaces concrete hazards alongside
+`targets` pipelines, `here::here()` markers, zero-byte files, and unusual
+filenames:
+
+```{r rprofile-hazards}
+library(rcapsule)
+
+proj <- tempfile("rcapsule_troubleshoot_")
+dir.create(file.path(proj, "data"), recursive = TRUE)
+
+writeLines(
+  c(
+    "source('renv/activate.R')",
+    ".libPaths('/Users/alex/R/custom-lib')",
+    "setwd('/Users/alex/Desktop/my-paper')",
+    "Sys.setenv(GITHUB_TOKEN = 'ghp_do_not_commit_me')"
+  ),
+  file.path(proj, ".Rprofile")
+)
+
+writeLines(
+  c(
+    "library(targets)",
+    "library(here)",
+    "list(tar_target(clean, read.csv(here::here('data', 'survey wave 1.csv'))))"
+  ),
+  file.path(proj, "_targets.R")
+)
+writeLines("", file.path(proj, ".here"))
+write.csv(data.frame(id = 1:3, y = c(1, 2, 3)),
+          file.path(proj, "data", "survey wave 1.csv"), row.names = FALSE)
+
+sc <- scan_project(proj)
+sc$rprofile_hazards
+sc$has_targets
+sc$uses_here
+sc$unusual_filenames
+```
+
+When `_targets.R` is detected as the entrypoint, `compile_dockerfile()` and
+`compile_apptainer()` automatically emit `targets::tar_make()` as the container
+command:
+
+```{r targets-cmd}
+df_tar <- compile_dockerfile(sc, r_version = "4.4.1")
+tail(df_tar$lines, 5)
+```
+
+## 2. Apple Silicon (`arm64`) vs. HPC (`amd64`) & Posit PPM Binaries
+
+Developers on Apple Silicon laptops (`arm64`) frequently deploy containers to
+`x86_64` cloud hosts or university HPC clusters (`amd64`). `scan_project()`
+records host architecture hints in `scan$architecture`, and both
+`compile_dockerfile()` and `compile_compose()` support explicit `platform`
+pinning plus Posit Package Manager (`use_ppm = TRUE`) binary repositories:
+
+```{r cross-arch}
+sc$architecture
+
+df_amd64 <- compile_dockerfile(
+  sc,
+  r_version  = "4.4.1",
+  platform   = "linux/amd64",
+  use_ppm    = TRUE,
+  ppm_distro = "jammy",
+  ppm_date   = "2026-01-15"
+)
+
+grep("^(FROM|    R_REPOS=)", df_amd64$lines, value = TRUE)
+```
+
+Passing `use_ppm = FALSE` switches back to source package snapshots when
+compiling against custom system libraries or niche architectures.
+
+## 3. Configuring Exact vs. Per-File Monte Carlo Tolerances
+
+Deterministic summary tables should verify bit-for-bit (`atol = 0, rtol = 0`),
+while MCMC posterior summaries or cross-BLAS matrix decompositions may warrant
+explicit numeric tolerances. `compare_artifacts()` and
+`create_capsule_manifest()` support nested JSON, RDS (including matrices,
+data frames, and `NA`/`NaN`/`Inf` alignment), CSV, and TSV tolerances via
+`atol`/`rtol` (or `abs_tol`/`rel_tol`):
+
+```{r tolerances}
+f_ref <- tempfile(fileext = ".rds")
+f_run <- tempfile(fileext = ".rds")
+
+baseline <- list(
+  posterior_mean = c(alpha = 1.2500, beta = -0.4000),
+  cov_matrix = matrix(c(0.04, 0.01, 0.01, 0.09), nrow = 2),
+  diagnostics = list(rhat = c(1.001, 1.002), divergent = 0L)
+)
+reproduced <- baseline
+reproduced$posterior_mean <- c(alpha = 1.2503, beta = -0.3998)
+reproduced$cov_matrix[1, 2] <- 0.0102
+
+saveRDS(baseline, f_ref)
+saveRDS(reproduced, f_run)
+
+# Strict zero tolerance fails on SHA-256 mismatch
+compare_artifacts(f_ref, f_run, atol = 0, rtol = 0)$status
+
+# Explicit Monte Carlo tolerance passes and reports exact max observed error
+res_mc <- compare_artifacts(f_ref, f_run, atol = 1e-3, rtol = 1e-3)
+res_mc[c("status", "passed", "max_abs_diff", "max_rel_diff", "details")]
+```
+
+## 4. Handling Non-Deterministic Plot Metadata & Extra Artifacts
+
+Binary PDF and PNG files often embed creation timestamps or graphics-engine
+metadata that change SHA-256 digests across OS versions even when the plotted
+data are identical. Best practice in `rcapsule`:
+
+1. **Always save the underlying numerical data table** (`results/fig1_data.csv`
+   or `.rds`) alongside the rendered figure and register the numerical table in
+   `outputs` with exact or tolerance bounds.
+2. **Use `strict_outputs = TRUE`** in `verify_capsule()` during CI gating to
+   catch scripts that unexpectedly drop temporary files or log artifacts into
+   the workspace.
+3. **Keep ambient host secrets safe**: `verify_capsule(..., scrub_secrets = TRUE)`
+   automatically strips `AWS_*`, `GITHUB_TOKEN`, `OPENAI_API_KEY`, and other
+   credential variables before executing the isolated sandbox.
+
+```{r cleanup, include = FALSE}
+unlink(c(proj, f_ref, f_run), recursive = TRUE)
+```

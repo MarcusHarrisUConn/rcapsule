@@ -36,10 +36,12 @@
 #' @param volumes Optional character vector of extra volume mounts.
 #' @param restart_policy Docker restart policy for long-running services.
 #'   Defaults to `"unless-stopped"` for Shiny and `"no"` for batch analyses.
+#' @param platform Optional target container platform (`"linux/amd64"`,
+#'   `"linux/arm64"`, or `NULL` for host default) applied to built services.
 #'
 #' @return An S3 object of class `c("rcapsule_compose", "rcapsule_spec")`
 #'   with fields `content`, `lines`, `config` (parsed list), `services`,
-#'   `project_type`, `path`, and `scan`.
+#'   `platform`, `project_type`, `path`, and `scan`.
 #' @export
 #' @examples
 #' tmp <- tempfile("rcapsule_compose_")
@@ -63,12 +65,14 @@ compile_compose <- function(scan,
                             cpus = "2.0",
                             env_vars = list(),
                             volumes = NULL,
-                            restart_policy = NULL) {
+                            restart_policy = NULL,
+                            platform = NULL) {
   scan <- as_rcapsule_scan(scan)
   is_shiny <- identical(scan$project_type, "shiny")
 
   image_tag <- validate_image_tag(as.character(image_tag), arg = "image_tag")
   dockerfile <- validate_safe_rel_spec_path(as.character(dockerfile), arg = "dockerfile")
+  platform <- validate_container_platform(platform, arg = "platform")
   port <- validate_port_number(port, arg = "port")
   proxy_port <- validate_port_number(proxy_port, arg = "proxy_port")
 
@@ -156,6 +160,10 @@ compile_compose <- function(scan,
     networks = list("capsule-net")
   )
 
+  if (!is.null(platform)) {
+    svc_def$platform <- platform
+  }
+
   if (is_shiny) {
     if (with_proxy) {
       svc_def$expose <- list(as.character(as.integer(port)))
@@ -210,6 +218,9 @@ compile_compose <- function(scan,
       ),
       networks = list("capsule-net")
     )
+    if (!is.null(platform)) {
+      services$worker$platform <- platform
+    }
   }
 
   # Optional reverse proxy service (pinned Caddy tag)
@@ -293,6 +304,7 @@ compile_compose <- function(scan,
       lines = lines,
       config = parsed,
       services = names(services),
+      platform = platform,
       project_type = scan$project_type,
       path = written_path,
       scan = scan

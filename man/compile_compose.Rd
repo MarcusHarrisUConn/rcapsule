@@ -19,7 +19,8 @@ compile_compose(
   cpus = "2.0",
   env_vars = list(),
   volumes = NULL,
-  restart_policy = NULL
+  restart_policy = NULL,
+  platform = NULL
 )
 }
 \arguments{
@@ -63,11 +64,14 @@ variables (avoid hardcoding secrets; use \verb{$\{ENV_VAR\}} interpolation).}
 
 \item{restart_policy}{Docker restart policy for long-running services.
 Defaults to \code{"unless-stopped"} for Shiny and \code{"no"} for batch analyses.}
+
+\item{platform}{Optional target container platform (\code{"linux/amd64"},
+\code{"linux/arm64"}, or \code{NULL} for host default) applied to built services.}
 }
 \value{
 An S3 object of class \code{c("rcapsule_compose", "rcapsule_spec")}
 with fields \code{content}, \code{lines}, \code{config} (parsed list), \code{services},
-\code{project_type}, \code{path}, and \code{scan}.
+\code{platform}, \code{project_type}, \code{path}, and \code{scan}.
 }
 \description{
 Generates a validated, security-hardened \code{docker-compose.yml} stack tailored

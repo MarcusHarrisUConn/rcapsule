@@ -267,6 +267,8 @@ compile_apptainer <- function(scan,
     }
   } else if (identical(scan$project_type, "rmarkdown")) {
     paste0("    exec Rscript -e \"rmarkdown::render('", ep %||% "report.Rmd", "')\" \"$@\"")
+  } else if (!is.null(ep) && identical(tolower(basename(ep)), "_targets.r")) {
+    "    exec Rscript -e \"targets::tar_make()\" \"$@\""
   } else if (!is.null(ep)) {
     paste0("    exec Rscript \"", ep, "\" \"$@\"")
   } else {

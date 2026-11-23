@@ -39,6 +39,105 @@ extract_pkg_tokens_from_expr <- function(arg, allow_symbols = TRUE) {
   character()
 }
 
+# Audit .Rprofile for machine-specific portability hazards (excluding standard renv activation)
+inspect_rprofile_hazards <- function(rprofile_path) {
+  empty_tbl <- tibble::tibble(
+    line = integer(),
+    hazard = character(),
+    severity = character(),
+    message = character()
+  )
+  if (!fs::file_exists(rprofile_path)) {
+    return(empty_tbl)
+  }
+  lines <- readLines(rprofile_path, warn = FALSE, encoding = "UTF-8")
+  rows <- list()
+  add_h <- function(line, hazard, severity, message) {
+    rows[[length(rows) + 1L]] <<- list(
+      line = as.integer(line),
+      hazard = hazard,
+      severity = severity,
+      message = message
+    )
+  }
+
+  for (i in seq_along(lines)) {
+    ln_raw <- lines[[i]]
+    ln <- trimws(sub("#.*$", "", ln_raw))
+    if (!nzchar(ln)) next
+    # Ignore standard renv project activation line
+    if (grepl("source\\s*\\(\\s*['\"]renv/activate\\.R['\"]\\s*\\)", ln, perl = TRUE)) {
+      next
+    }
+    if (grepl("\\.libPaths\\s*\\(", ln, perl = TRUE)) {
+      add_h(i, "custom_libpaths", "warning",
+            ".Rprofile modifies .libPaths(); hardcoded library paths break container portability.")
+    }
+    if (grepl("\\bsetwd\\s*\\(", ln, perl = TRUE)) {
+      add_h(i, "setwd_call", "error",
+            ".Rprofile calls setwd(); use relative paths or here::here() instead.")
+    }
+    if (grepl("(/Users/|/home/|/Volumes/|[A-Za-z]:[/\\\\])", ln, perl = TRUE)) {
+      add_h(i, "hardcoded_local_path", "warning",
+            ".Rprofile references a machine-specific absolute path.")
+    }
+    if (grepl("Sys\\.setenv\\s*\\(", ln, perl = TRUE) &&
+      grepl("(TOKEN|SECRET|PASSWORD|PASSWD|API_KEY|ACCESS_KEY|PRIVATE_KEY|PAT|AWS_|GITHUB_|OPENAI_|ANTHROPIC_)", ln, ignore.case = TRUE, perl = TRUE)) {
+      add_h(i, "secret_in_rprofile", "error",
+            ".Rprofile sets an apparent secret/token via Sys.setenv(); pass secrets at runtime instead.")
+    }
+  }
+
+  if (length(rows) == 0L) {
+    return(empty_tbl)
+  }
+  tibble::tibble(
+    line = vapply(rows, `[[`, integer(1L), "line"),
+    hazard = vapply(rows, `[[`, character(1L), "hazard"),
+    severity = vapply(rows, `[[`, character(1L), "severity"),
+    message = vapply(rows, `[[`, character(1L), "message")
+  )
+}
+
+# Inspect host architecture and multi-architecture container compatibility hints
+detect_architecture_info <- function(toolchains) {
+  machine <- tryCatch(as.character(Sys.info()[["machine"]]), error = function(e) "")
+  sysname <- tryCatch(as.character(Sys.info()[["sysname"]]), error = function(e) "")
+  plat <- as.character(R.version$platform)
+  is_arm64 <- grepl("arm64|aarch64", paste(machine, plat), ignore.case = TRUE)
+  is_apple_silicon <- is_arm64 && identical(sysname, "Darwin")
+
+  active_compiled <- names(toolchains)[vapply(names(toolchains), function(nm) {
+    nm %in% c("cpp", "cmdstan", "tmb", "jags", "rust", "java") && isTRUE(toolchains[[nm]]$detected)
+  }, logical(1L))]
+
+  notes <- character()
+  if (is_apple_silicon) {
+    notes <- c(
+      notes,
+      "Host is Apple Silicon (arm64); specify platform = 'linux/amd64' when targeting x86_64 HPC or cloud clusters."
+    )
+  }
+  if (is_arm64 && length(active_compiled) > 0L) {
+    notes <- c(
+      notes,
+      paste0(
+        "Compiled toolchain(s) detected (", paste(active_compiled, collapse = ", "),
+        "): cross-architecture builds (arm64 vs amd64) may require recompilation or explicit --platform pinning."
+      )
+    )
+  }
+
+  list(
+    host_arch = if (is_arm64) "arm64" else "amd64",
+    host_platform = plat,
+    is_apple_silicon = is_apple_silicon,
+    recommended_container_platform = if (is_arm64) "linux/arm64" else "linux/amd64",
+    hpc_target_platform = "linux/amd64",
+    notes = notes
+  )
+}
+
 # Parse R code text (AST with string-stripped regex fallback) to extract packages and tool signals
 parse_r_code_signals <- function(code_text, source_label = "<inline>") {
   pkgs <- character()
@@ -54,6 +153,8 @@ parse_r_code_signals <- function(code_text, source_label = "<inline>") {
     quarto = character(),
     shiny = character(),
     shiny_async = character(),
+    targets = character(),
+    here = character(),
     python_packages = character(),
     seeds = integer()
   )
@@ -222,6 +323,14 @@ parse_r_code_signals <- function(code_text, source_label = "<inline>") {
         }
         if (fn_name %in% c("quarto_render", "quarto_preview")) {
           signals$quarto <<- c(signals$quarto, paste0(source_label, ":", fn_name, "()"))
+        }
+        if (fn_name %in% c("tar_make", "tar_target", "tar_plan", "tar_option_set") &&
+          (is.null(fn_ns) || identical(fn_ns, "targets") || identical(fn_ns, "tarchetypes"))) {
+          signals$targets <<- c(signals$targets, paste0(source_label, ":", fn_name, "()"))
+        }
+        if ((identical(fn_name, "here") && (is.null(fn_ns) || identical(fn_ns, "here"))) ||
+          (identical(fn_name, "i_am") && identical(fn_ns, "here"))) {
+          signals$here <<- c(signals$here, paste0(source_label, ":", fn_name, "()"))
         }
       }
 
@@ -659,9 +768,31 @@ scan_project <- function(path = ".", exclude = NULL, custom_sysreqs = NULL) {
 
   shiny_reasons <- character()
   shiny_async_reasons <- character()
+  targets_reasons <- character()
+  here_reasons <- character()
   python_pkgs <- character()
   seeds_detected <- integer()
   sysreq_strings <- character()
+
+  # Inspect .Rprofile portability hazards (confined inside root)
+  rprofile_path <- file.path(real_root, ".Rprofile")
+  rprofile_hazards <- if (fs::file_exists(rprofile_path) && is_confined_existing_path(rprofile_path, real_root)) {
+    inspect_rprofile_hazards(rprofile_path)
+  } else {
+    tibble::tibble(line = integer(), hazard = character(), severity = character(), message = character())
+  }
+
+  # Detect here::here() root markers and _targets.R pipelines
+  if (".here" %in% rels) here_reasons <- c(here_reasons, ".here")
+  if (any(grepl("\\.Rproj$", rels, ignore.case = TRUE))) here_reasons <- c(here_reasons, "*.Rproj")
+  has_targets_file <- any(tolower(rels) == "_targets.r")
+  targets_file <- if (has_targets_file) rels[tolower(rels) == "_targets.r"][[1L]] else NULL
+  if (has_targets_file) targets_reasons <- c(targets_reasons, targets_file)
+
+  # Detect zero-byte files, binary artifacts, and Unicode/whitespace filenames
+  zero_byte_files <- files_tbl$path[!is.na(files_tbl$size_bytes) & files_tbl$size_bytes == 0]
+  binary_files <- files_tbl$path[files_tbl$kind == "binary"]
+  unusual_filenames <- files_tbl$path[grepl("\\s", files_tbl$path) | grepl("[^\\x20-\\x7E]", files_tbl$path, perl = TRUE)]
 
   # 1. Inspect DESCRIPTION (only if confined inside project root)
   desc_path <- file.path(real_root, "DESCRIPTION")
@@ -785,6 +916,8 @@ scan_project <- function(path = ".", exclude = NULL, custom_sysreqs = NULL) {
       for (r in res$signals$quarto) add_tc("quarto", r)
       shiny_reasons <- c(shiny_reasons, res$signals$shiny)
       shiny_async_reasons <- c(shiny_async_reasons, res$signals$shiny_async)
+      targets_reasons <- c(targets_reasons, res$signals$targets)
+      here_reasons <- c(here_reasons, res$signals$here)
       python_pkgs <- c(python_pkgs, res$signals$python_packages)
       seeds_detected <- c(seeds_detected, res$signals$seeds)
     } else if (ext %in% c("qmd", "rmd")) {
@@ -812,6 +945,8 @@ scan_project <- function(path = ".", exclude = NULL, custom_sysreqs = NULL) {
         for (r in res$signals$quarto) add_tc("quarto", r)
         shiny_reasons <- c(shiny_reasons, res$signals$shiny)
         shiny_async_reasons <- c(shiny_async_reasons, res$signals$shiny_async)
+        targets_reasons <- c(targets_reasons, res$signals$targets)
+        here_reasons <- c(here_reasons, res$signals$here)
         python_pkgs <- c(python_pkgs, res$signals$python_packages)
         seeds_detected <- c(seeds_detected, res$signals$seeds)
       }
@@ -997,6 +1132,9 @@ scan_project <- function(path = ".", exclude = NULL, custom_sysreqs = NULL) {
 
   r_version <- (renv_info$r_version %||% current_r_version())
   project_name <- desc_pkg_name %||% basename(root)
+  arch_info <- detect_architecture_info(toolchains)
+  has_targets <- has_targets_file || length(targets_reasons) > 0L || ("targets" %in% req_pkgs)
+  uses_here <- ("here" %in% req_pkgs) || any(grepl("here\\(\\)|i_am\\(\\)", here_reasons))
 
   structure(
     list(
@@ -1011,6 +1149,15 @@ scan_project <- function(path = ".", exclude = NULL, custom_sysreqs = NULL) {
       has_description = has_description,
       has_quarto_yml = has_quarto_yml,
       quarto_project_type = quarto_project_type,
+      has_targets = has_targets,
+      targets_file = targets_file,
+      uses_here = uses_here,
+      here_markers = unique(here_reasons),
+      rprofile_hazards = rprofile_hazards,
+      zero_byte_files = sort(unique(zero_byte_files)),
+      binary_files = sort(unique(binary_files)),
+      unusual_filenames = sort(unique(unusual_filenames)),
+      architecture = arch_info,
       shiny_async = length(shiny_async_reasons) > 0L,
       shiny_async_reasons = unique(shiny_async_reasons),
       files = files_tbl,
@@ -1099,6 +1246,13 @@ print.rcapsule_scan <- function(x, ...) {
     cli::cli_text(paste(build_apt, collapse = ", "))
   } else {
     cli::cli_text("{.emph None required}")
+  }
+
+  if (!is.null(x$rprofile_hazards) && nrow(x$rprofile_hazards) > 0L) {
+    cli::cli_h2(".Rprofile Portability Hazards ({nrow(x$rprofile_hazards)})")
+    for (i in seq_len(nrow(x$rprofile_hazards))) {
+      cli::cli_alert_warning("Line {x$rprofile_hazards$line[[i]]} [{x$rprofile_hazards$hazard[[i]]}]: {x$rprofile_hazards$message[[i]]}")
+    }
   }
   invisible(x)
 }

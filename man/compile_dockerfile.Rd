@@ -10,7 +10,11 @@ compile_dockerfile(
   base_image = NULL,
   r_version = NULL,
   base_digest = NULL,
-  cran_repo = "https://packagemanager.posit.co/cran/2026-01-15",
+  platform = NULL,
+  cran_repo = NULL,
+  use_ppm = TRUE,
+  ppm_distro = "jammy",
+  ppm_date = "2026-01-15",
   quarto_version = "1.5.57",
   cmdstan_version = "2.35.0",
   user = "capsule",
@@ -37,8 +41,25 @@ project directory.}
 \item{base_digest}{Optional SHA-256 image digest (e.g., \code{"sha256:..."})
 appended to \code{base_image} for immutable image pinning.}
 
-\item{cran_repo}{Pinned CRAN or Posit Public Package Manager repository URL
-used when \code{renv.lock} is not present.}
+\item{platform}{Optional target container platform (\code{"linux/amd64"},
+\code{"linux/arm64"}, or \code{NULL} for host default). Useful when building
+\code{x86_64} HPC or cloud images on Apple Silicon (\code{arm64}) hosts.}
+
+\item{cran_repo}{Optional custom pinned CRAN or Posit Public Package Manager
+repository URL used when \code{renv.lock} is not present. If \code{NULL} (default),
+automatically selects a pinned Posit Package Manager URL controlled by
+\code{use_ppm}, \code{ppm_distro}, and \code{ppm_date}.}
+
+\item{use_ppm}{Logical; if \code{TRUE} (default) and \code{cran_repo} is \code{NULL}, uses
+Posit Public Package Manager Linux binary repositories for dramatically
+faster reproducible container builds.}
+
+\item{ppm_distro}{Linux distribution codename for Posit Package Manager
+binaries (\code{"jammy"}, \code{"noble"}, \code{"focal"}, \code{"bookworm"}, or \code{"bullseye"}).
+Defaults to \code{"jammy"} (Ubuntu 22.04 LTS matching Rocker).}
+
+\item{ppm_date}{Pinned Posit Package Manager snapshot date (\code{"YYYY-MM-DD"}).
+Defaults to \code{"2026-01-15"}.}
 
 \item{quarto_version}{Pinned Quarto CLI version installed when Quarto is
 detected. Defaults to \code{"1.5.57"}.}
@@ -69,8 +90,8 @@ untagged base images.}
 }
 \value{
 An S3 object of class \code{c("rcapsule_dockerfile", "rcapsule_spec")}
-with fields \code{content}, \code{lines}, \code{base_image}, \code{stages}, \code{project_type},
-\code{path}, and \code{scan}.
+with fields \code{content}, \code{lines}, \code{base_image}, \code{platform}, \code{cran_repo},
+\code{use_ppm}, \code{stages}, \code{project_type}, \code{path}, and \code{scan}.
 }
 \description{
 Compiles an \code{rcapsule_scan} (or project directory path) into a lean,

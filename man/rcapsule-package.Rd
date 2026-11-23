@@ -6,12 +6,30 @@
 \alias{rcapsule-package}
 \title{rcapsule: Reproducibility Capsules and Multi-Target Containerization for R}
 \description{
-Compiles R analysis projects, Quarto manuscripts, R Markdown reports, R packages, and Shiny applications into lean, layer-cached Dockerfiles, multi-service 'docker-compose.yml' stacks, and HPC-ready Apptainer definitions. Resolves full-stack R package, OS system library, and scientific toolchain dependencies ('CmdStan', 'TMB'/'RTMB', 'JAGS', 'C++', 'Rust', 'Python'/'reticulate', 'Quarto', and 'LaTeX'), records cryptographically verifiable provenance manifests ('capsule.json') with SHA-256 artifact hashes and optional HMAC-SHA256 signatures, and executes isolated reproducibility audits with exact and numeric-tolerance comparators to produce journal-ready verification certificates.
+Full-stack computational reproducibility compiler and verifier for R
+analysis repositories, Quarto manuscripts, R Markdown reports, R packages,
+\code{targets} pipelines, and Shiny applications.
 }
+\section{Main Workflows}{
+
+\itemize{
+\item \strong{Scan projects}: \code{\link[=scan_project]{scan_project()}}, \code{\link[=sysreqs_db]{sysreqs_db()}}, \code{\link[=resolve_sysreqs]{resolve_sysreqs()}}
+\item \strong{Compile & lint containers}: \code{\link[=compile_dockerfile]{compile_dockerfile()}},
+\code{\link[=compile_compose]{compile_compose()}}, \code{\link[=compile_apptainer]{compile_apptainer()}}, \code{\link[=lint_container_spec]{lint_container_spec()}}
+\item \strong{Cryptographic manifests & diffing}: \code{\link[=create_capsule_manifest]{create_capsule_manifest()}},
+\code{\link[=read_capsule_manifest]{read_capsule_manifest()}}, \code{\link[=write_capsule_manifest]{write_capsule_manifest()}}, \code{\link[=sign_manifest]{sign_manifest()}},
+\code{\link[=verify_manifest_integrity]{verify_manifest_integrity()}}, \code{\link[=diff_capsules]{diff_capsules()}}
+\item \strong{Isolated verification & publishing}: \code{\link[=verify_capsule]{verify_capsule()}},
+\code{\link[=compare_artifacts]{compare_artifacts()}}, \code{\link[=render_certificate]{render_certificate()}}, \code{\link[=export_capsule_bundle]{export_capsule_bundle()}},
+\code{\link[=build_capsule]{build_capsule()}}
+}
+}
+
 \seealso{
 Useful links:
 \itemize{
   \item \url{https://github.com/MarcusHarrisUConn/rcapsule}
+  \item \url{https://marcusharrisphd.com/rcapsule/}
   \item Report bugs at \url{https://github.com/MarcusHarrisUConn/rcapsule/issues}
 }
 
