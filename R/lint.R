@@ -188,14 +188,12 @@ lint_dockerfile_lines <- function(lines) {
     arg_clean <- sub("^--platform=\\S+\\s+", "", ins$args)
     img <- strsplit(arg_clean, "\\s+")[[1L]][[1L]]
     if (identical(tolower(img), "scratch")) next
-    is_latest <- grepl(":latest($|@)", img, ignore.case = TRUE)
-    has_tag <- grepl(":[^/@]+($|@)", img)
-    has_digest <- grepl("@sha256:[0-9a-fA-F]{64}$", img)
+    is_latest <- grepl(":latest(\\z|@)", img, ignore.case = TRUE, perl = TRUE)
     if (is_latest) {
       add_issue("DF001", "error", ins$line,
         paste0("Base image '", img, "' uses mutable ':latest' tag."),
         "Pin an explicit version tag or @sha256 digest.")
-    } else if (!has_tag && !has_digest && !grepl("^\\$\\{?[A-Za-z_]", img)) {
+    } else if (!has_pinned_image_tag_or_digest(img) && !grepl("\\A\\$\\{?[A-Za-z_]", img, perl = TRUE)) {
       add_issue("DF001", "error", ins$line,
         paste0("Base image '", img, "' has no pinned tag or digest."),
         "Pin an explicit version tag (e.g. rocker/r-ver:4.4.1) or @sha256 digest.")
@@ -340,11 +338,10 @@ lint_compose_lines <- function(lines) {
     if (!is.list(svc)) next
     svc_line <- find_line(paste0("^\\s*", svc_name, "\\s*:"))
 
-    # DC002: Unpinned :latest image
+    # DC002: Unpinned :latest or untagged image (handles registry ports like localhost:5000/img)
     if (!is.null(svc$image) && is.character(svc$image)) {
       img <- svc$image[[1L]]
-      if (grepl(":latest($|@)", img, ignore.case = TRUE) ||
-        (!grepl(":", img, fixed = TRUE) && !grepl("@sha256:", img, fixed = TRUE))) {
+      if (!has_pinned_image_tag_or_digest(img)) {
         add_issue("DC002", "error", svc_line,
           paste0("Service '", svc_name, "' uses unpinned image '", img, "'."),
           "Pin an explicit version tag or @sha256 digest.")
@@ -412,7 +409,10 @@ lint_compose_lines <- function(lines) {
     vols <- as.character(unlist(svc$volumes %||% character()))
     for (v in vols) {
       host_src <- strsplit(v, ":", fixed = TRUE)[[1L]][[1L]]
-      if (grepl("docker\\.sock$", host_src, ignore.case = TRUE) || host_src %in% c("/", "/etc", "/root")) {
+      norm_src <- gsub("/+", "/", host_src)
+      if (nchar(norm_src) > 1L) norm_src <- sub("/+\\z", "", norm_src, perl = TRUE)
+      if (grepl("(docker|podman)\\.sock\\z", norm_src, ignore.case = TRUE, perl = TRUE) ||
+        norm_src %in% c("/", "/etc", "/root", "/proc", "/sys", "/dev", "/var/run", "/run")) {
         add_issue("DC009", "warning", svc_line,
           paste0("Service '", svc_name, "' mounts sensitive host path '", host_src, "'."),
           "Avoid mounting Docker socket or sensitive host system directories into containers.")
@@ -444,8 +444,7 @@ lint_apptainer_lines <- function(lines) {
       "Specify 'Bootstrap: docker' and a pinned 'From:' image at the top of the recipe.")
   } else {
     from_val <- trimws(sub("^\\s*From\\s*:\\s*", "", lines[[from_idx[[1L]]]], ignore.case = TRUE))
-    if (grepl(":latest($|@)", from_val, ignore.case = TRUE) ||
-      (!grepl(":", from_val, fixed = TRUE) && !grepl("@sha256:", from_val, fixed = TRUE))) {
+    if (!has_pinned_image_tag_or_digest(from_val)) {
       add_issue("AP002", "error", from_idx[[1L]],
         paste0("Apptainer 'From:' image '", from_val, "' is not pinned to a version tag or digest."),
         "Pin an explicit version tag (e.g. rocker/r-ver:4.4.1) or @sha256 digest.")
@@ -522,11 +521,11 @@ print.rcapsule_lint <- function(x, ...) {
       row <- x$issues[i, ]
       msg <- paste0("[", row$rule_id, "] (line ", row$line, ") ", row$message)
       if (row$severity == "error") {
-        cli::cli_alert_danger(msg)
+        cli::cli_alert_danger("{msg}")
       } else if (row$severity == "warning") {
-        cli::cli_alert_warning(msg)
+        cli::cli_alert_warning("{msg}")
       } else {
-        cli::cli_alert_info(msg)
+        cli::cli_alert_info("{msg}")
       }
     }
   }

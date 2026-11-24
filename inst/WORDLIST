@@ -28,6 +28,7 @@ Rmd
 Rprofile
 SBOM
 SBOMs
+SCP
 SHA
 Slurm
 TMB
@@ -36,6 +37,7 @@ TinyTeX
 Toolchain
 Toolchains
 UUID
+VCS
 XSS
 Zenodo
 allowlists
@@ -54,13 +56,17 @@ handoff
 hardcoded
 hardcoding
 intentioned
+interop
 json
 linter
+linters
 lockfiles
 orchestrator
 orchestrators
+plaintext
 pre
 rasterization
+recursed
 remediations
 reticulate
 rootful
@@ -80,6 +86,8 @@ tibbles
 toolchain
 toolchains
 untagged
+untrusted
+validators
 verifier
 workdirs
 yml

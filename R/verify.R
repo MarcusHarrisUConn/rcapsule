@@ -73,7 +73,8 @@ stage_clean_sandbox <- function(root, manifest, sandbox_dir) {
     if (length(all_files) > 0L) {
       rels <- rel_path(all_files, real_root)
       excludes <- c(default_scan_excludes(), "capsule.json")
-      keep <- !is_excluded_rel_path(rels, excludes) & !(rels %in% output_rels)
+      secret_dotfiles <- grepl("\\A(\\.renviron|\\.rprofile|\\.env(\\..*)?|\\.netrc)\\z", tolower(basename(rels)), perl = TRUE)
+      keep <- !is_excluded_rel_path(rels, excludes) & !(rels %in% output_rels) & !secret_dotfiles
       copy_files <- all_files[keep]
       copy_rels <- rels[keep]
 
@@ -158,7 +159,7 @@ write_runner_bootstrap <- function(sandbox_dir, entrypoint, seed, rng_kind) {
   runner_path
 }
 
-# Build clean controlled environment vector for child execution with secret scrubbing
+# Build clean controlled environment vector for child execution with secret scrubbing & HOME isolation
 build_sandbox_env <- function(sandbox_dir, seed = NULL, env_vars = list(), scrub_secrets = TRUE) {
   clean_user_env <- validate_env_vars(env_vars, arg = "env_vars")
   cur <- as.list(Sys.getenv())
@@ -172,11 +173,21 @@ build_sandbox_env <- function(sandbox_dir, seed = NULL, env_vars = list(), scrub
     env <- cur
   }
 
+  sandbox_home <- file.path(sandbox_dir, ".rcapsule_home")
+  fs::dir_create(sandbox_home)
+
   env$TZ <- "UTC"
   env$LC_ALL <- "C.UTF-8"
   env$LANG <- "C.UTF-8"
   env$RCAPSULE_SANDBOX <- "1"
   env$R_USER_CACHE_DIR <- file.path(sandbox_dir, ".rcapsule_cache")
+  env$HOME <- sandbox_home
+  env$USERPROFILE <- sandbox_home
+  env$R_ENVIRON_USER <- ""
+  env$R_ENVIRON <- ""
+  env$R_PROFILE_USER <- ""
+  env$R_PROFILE <- ""
+  env$NETRC <- NA_character_
   if (!is.null(seed) && !is.na(seed)) {
     env$CAPSULE_SEED <- as.character(as.integer(seed))
   }
@@ -194,8 +205,11 @@ run_in_sandbox <- function(sandbox_dir, runner_script, env, timeout) {
   res <- tryCatch(
     callr::rscript(
       script = runner_script,
+      cmdargs = c("--no-environ", "--no-init-file"),
       wd = sandbox_dir,
       env = env,
+      user_profile = FALSE,
+      system_profile = FALSE,
       timeout = timeout,
       fail_on_status = FALSE,
       spinner = FALSE,
@@ -219,10 +233,21 @@ run_in_sandbox <- function(sandbox_dir, runner_script, env, timeout) {
   )
 }
 
-# Build docker run argument vector cleanly (testable offline without Docker daemon)
-build_docker_run_args <- function(sandbox_dir, img, seed = NULL, env_vars = list(), runner_file = ".rcapsule_runner.R") {
+# Build hardened docker run argument vector cleanly (testable offline without Docker daemon)
+build_docker_run_args <- function(sandbox_dir, img, seed = NULL, env_vars = list(),
+                                  runner_file = ".rcapsule_runner.R", network = "none") {
+  validate_docker_image_ref(img, arg = "docker_image")
+  assert_no_control_chars(sandbox_dir, arg = "sandbox_dir")
+  if (grepl(":", sandbox_dir, fixed = TRUE)) {
+    cli::cli_abort("Unsafe ':' character in {.arg sandbox_dir} for Docker volume mount: {.path {sandbox_dir}}.")
+  }
+  validate_safe_rel_spec_path(runner_file, arg = "runner_file")
+
   run_args <- c(
     "run", "--rm",
+    paste0("--network=", network),
+    "--cap-drop=ALL",
+    "--security-opt=no-new-privileges:true",
     "-e", "TZ=UTC",
     "-e", "LC_ALL=C.UTF-8",
     "-e", "LANG=C.UTF-8",
@@ -242,7 +267,7 @@ build_docker_run_args <- function(sandbox_dir, img, seed = NULL, env_vars = list
     "-v", paste0(sandbox_dir, ":/capsule"),
     "-w", "/capsule",
     img,
-    "Rscript", runner_file
+    "Rscript", "--vanilla", runner_file
   )
 }
 
@@ -253,6 +278,12 @@ run_in_docker <- function(root, sandbox_dir, docker_image, docker_tag, seed, env
     cli::cli_abort(
       "Docker daemon is not available. Use {.code runner = \"sandbox\"} for isolated local verification or start Docker."
     )
+  }
+  if (!is.null(docker_image)) {
+    validate_docker_image_ref(docker_image, arg = "docker_image")
+  }
+  if (!is.null(docker_tag)) {
+    validate_docker_image_ref(docker_tag, arg = "docker_tag")
   }
   docker_bin <- unname(Sys.which("docker"))
   if (!nzchar(docker_bin)) docker_bin <- "docker"
@@ -266,6 +297,7 @@ run_in_docker <- function(root, sandbox_dir, docker_image, docker_tag, seed, env
       cli::cli_abort("No {.arg docker_image} provided and no Dockerfile found at {.path {df_path}}.")
     }
     img <- docker_tag %||% paste0("rcapsule-verify-", tolower(substr(sha256_string(root), 1L, 10L)), ":audit")
+    validate_docker_image_ref(img, arg = "docker_tag")
     b_res <- runner_fn(
       command = docker_bin,
       args = c("build", "-t", img, "-f", df_path, root),
@@ -489,7 +521,8 @@ verify_capsule <- function(manifest,
   extra_artifacts <- character()
   if (length(post_entries) > 0L) {
     post_rels <- rel_path(post_entries, real_sandbox)
-    internal_mask <- post_rels == ".rcapsule_runner.R" | grepl("^\\.rcapsule_cache(/|$)", post_rels)
+    internal_mask <- post_rels == ".rcapsule_runner.R" |
+      grepl("^\\.rcapsule_(cache|home)(/|$)", post_rels)
     known_rels <- unique(c(staged_rels, output_rels))
     extra_artifacts <- sort(setdiff(post_rels[!internal_mask], known_rels))
   }
@@ -613,16 +646,16 @@ print.rcapsule_verification <- function(x, ...) {
       row <- x$output_checks[i, ]
       line <- paste0(row$path, " [", row$status, "] - ", row$details)
       if (isTRUE(row$passed)) {
-        cli::cli_alert_success(line)
+        cli::cli_alert_success("{line}")
       } else {
-        cli::cli_alert_danger(line)
+        cli::cli_alert_danger("{line}")
       }
     }
   }
 
   if (length(x$failure_reasons) > 0L) {
     cli::cli_h2("Failure Diagnostics")
-    for (fr in x$failure_reasons) cli::cli_alert_danger(fr)
+    for (fr in x$failure_reasons) cli::cli_alert_danger("{fr}")
   }
 
   invisible(x)

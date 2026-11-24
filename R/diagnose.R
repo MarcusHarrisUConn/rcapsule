@@ -571,11 +571,11 @@ print.rcapsule_diagnosis <- function(x, ...) {
       row <- x$findings[i, ]
       msg <- paste0("#", row$rank, " [", toupper(row$severity), " | ", row$category, "] ", row$affected, ": ", row$evidence)
       if (row$severity %in% c("critical", "high")) {
-        cli::cli_alert_danger(msg)
+        cli::cli_alert_danger("{msg}")
       } else if (row$severity == "medium") {
-        cli::cli_alert_warning(msg)
+        cli::cli_alert_warning("{msg}")
       } else {
-        cli::cli_alert_info(msg)
+        cli::cli_alert_info("{msg}")
       }
       cli::cli_text("   Remediation: {row$remediation}")
     }

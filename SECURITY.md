@@ -1,4 +1,4 @@
-# Security Policy & v0.2.0 Red-Team Hardening Audit
+# Security Policy & Red-Team Hardening Audits
 
 ## Threat Model
 
@@ -28,6 +28,31 @@ All shared validation, sanitization, confinement, constant-time crypto, environm
 | **VULN-09** | `verify_capsule()` | Unexpected extra files emitted during execution were not tracked or flagged. | Recorded pre-run vs. post-run sandbox file sets to detect and report `extra_artifacts` (excluding internal runner/cache files) and added `strict_outputs = TRUE` mode to fail audits on undeclared outputs. |
 | **VULN-10** | `verify_capsule()` (`runner = "sandbox"`) | `build_sandbox_env()` inherited all host `Sys.getenv()` variables (and `callr::rscript()` merges `env` over the parent environment unless variables are explicitly unset via `NA_character_`), exposing cloud/API/VCS tokens to executed scripts. | Implemented `scrub_sandbox_env()` explicitly mapping `AWS_*`, `GITHUB_*`, `GH_*`, `GITLAB_*`, `OPENAI_*`, `ANTHROPIC_*`, `GEMINI_*`, `GOOGLE_API*`, `AZURE_*`, `GCP_*`, `CAPSULE_SIGNING_KEY`, and `*_SECRET*`/`*_TOKEN*`/`*_PASSWORD*`/`*_API_KEY*`/`*_PRIVATE_KEY*`/`*_PAT` variables to `NA_character_` before `callr::rscript()` (`scrub_secrets = TRUE`), removing them from the child OS environment and recording scrubbed variable names (never values) in `scrubbed_env_vars`. |
 | **VULN-11** | `render_certificate()` | Passing `htmltools::HTML()`-classed strings or malicious project/path/git/diff metadata could bypass escaping in HTML or break Markdown tables. | Added `safe_html_text()` (stripping `"html"` class before escaping), `escape_html_strict()`, `sanitize_markdown_cell()`, `sanitize_markdown_inline()`, and a strict `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">` header in standalone HTML5 certificates. |
+
+---
+
+## v0.5.0 Independent Peer Red-Team Audit & Hardening
+
+Following an independent Phase 1 peer red-team audit covering security injection, secret exfiltration, boundary conditions, accuracy, and live cross-package HPC interop, **v0.5.0** closed all 16 confirmed findings with permanent regression tests in `tests/testthat/test-peer-redteam.R`:
+
+| ID | Severity | Surface | Mitigation Implemented in v0.5.0 |
+| :--- | :---: | :--- | :--- |
+| **CRITICAL-1** | Critical | Six `print.*()` methods (`lint`, `verification`, `diagnosis`, `diff`, `integrity`, `scan`) | Eliminated `cli`/`glue` double-interpolation by passing dynamic strings via single-level `{msg}`/`{line}` placeholders; strictly validated `renv.lock` `Version` strings in `parse_renv_lock()`. |
+| **HIGH-1** | High | `verify_capsule()`, `verify_with_script()` sandbox isolation | Excluded `.Renviron`, `.Rprofile`, `.env`, `.env.*`, and `.netrc` from sandbox staging; created isolated temp `HOME` (`.rcapsule_home`) clearing `R_ENVIRON_USER`, `R_ENVIRON`, `R_PROFILE_USER`, `R_PROFILE`, and `NETRC`; passed `user_profile = FALSE`, `system_profile = FALSE`, and `cmdargs = c("--no-environ", "--no-init-file")` to `callr::rscript()`. |
+| **HIGH-2** | High | `detect_git_info()`, `create_capsule_manifest()`, `export_capsule_bundle()` | Added `sanitize_git_remote_url()` to strip HTTP(S) `userinfo@` PATs and SCP passwords from Git remote URLs before recording manifests or exporting bundles. |
+| **HIGH-3** | High | `compare_artifacts()` accuracy | Switched data-frame comparisons to positional column indexing (catching duplicate CSV/TSV column names); enforced `dim()`/`names()`/`dimnames()` on non-numeric arrays, factor `levels()`/`is.ordered()`, `row.names`, `POSIXt` `tzone`, S3 list `class`, and JSON `{}` vs. `[]` distinction. |
+| **HIGH-4** | High | `R/security.R`, `R/sbom.R` PCRE validators | Replaced PCRE `$` with `\A...\z` plus explicit ASCII control-character rejection across R/apt/Python/env-var/SBOM UUID/PURL/timestamp/hash validators. |
+| **HIGH-5** | High | `as_apptainer_spec()`, `compile_apptainer()` HPC interop | Standardized `c("rcapsule_apptainer_spec", "rcapsule")` class, dual `bind_paths`/`binds` and `def_sha256`/`content_digest` fields, always-populated `sif_path`, and `def_path` preservation across all overrides. |
+| **HIGH-6** | High | `verify_capsule(runner = "docker")` | Validated `docker_image`/`docker_tag` with `validate_docker_image_ref()`, rejected `:` in `sandbox_dir`, and enforced `--network=none`, `--cap-drop=ALL`, `--security-opt=no-new-privileges:true`, and `Rscript --vanilla`. |
+| **HIGH-7** | High | `scan_project()` AST walker | Guarded call-head symbol inspection with `is.symbol(fn[[1L]])` and recursed into higher-order call heads (`scales::col_numeric(...)(0.5)`). |
+| **MEDIUM-1** | Medium | `scrub_sandbox_env()` | Expanded `secret_env_var_patterns()` to cover `APIKEY`, `_PASS`, `_PWD`, `DATABASE_URL`, database DSNs, `CONN_STR`, `PGPASSFILE`, `NETRC`, `AUTHORIZATION`, `JWT`, `KUBECONFIG`, `PAT_*`, and `(SSH|HMAC|S3|GROQ|COHERE|...)_KEY`. |
+| **MEDIUM-2** | Medium | `validate_compose_volume()`, `lint_container_spec()` | Normalized repeated/trailing slashes, required strict `src:abs_dst[:mode]` format with allowlisted mount modes, and blocked `/`, `/etc`, `/root`, `/proc`, `/sys`, `/dev`, `/var/run`, `/run`, `docker.sock`, and `podman.sock`. |
+| **MEDIUM-3** | Medium | `compile_compose()`, `compile_dockerfile()`, `lint_container_spec()` | Centralized `has_pinned_image_tag_or_digest()` so registry port prefixes (`localhost:5000/img`) cannot bypass tag/digest pinning checks. |
+| **MEDIUM-4** | Medium | `compile_compose()` | Aborts cleanly when `service_name` collides with an enabled `worker` or `proxy` companion service. |
+| **MEDIUM-5** | Medium | `render_certificate()`, `export_capsule_bundle()` | Escaped backticks (`&#96;`) in `sanitize_markdown_cell()`/`sanitize_markdown_inline()` and sanitized `included_files` in `README_REPRODUCE.md`. |
+| **MEDIUM-6** | Medium | `export_sbom()`, `validate_sbom()`, `parse_requirements_txt()` | Preserved pip `#egg=` URL fragments, handled PEP 508 markers and VCS URLs cleanly, and guarded `validate_sbom()` against atomic JSON arrays in `hashes`/`dependencies`. |
+| **LOW-1** | Low | `parse_renv_lock()`, `compile_dockerfile()` | Ignored atomic non-list `renv.lock` package entries; skipped `COPY .Rprofile ./` with a warning when `secret_in_rprofile` is detected. |
+| **LOW-2** | Low | `verify_with_script()` | Coerced named character `env_vars` to a list before attaching `RCAPSULE_AUDIT_ARGS`, eliminating type-coercion warnings. |
 
 ---
 

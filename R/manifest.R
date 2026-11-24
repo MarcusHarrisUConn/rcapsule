@@ -587,7 +587,7 @@ print.rcapsule_integrity <- function(x, ...) {
     "Signed: {.val {x$signed}} | Signature check: {.val {if (is.na(x$signature_valid)) 'not verified' else x$signature_valid}}"
   ))
   if (length(x$issues) > 0L) {
-    for (iss in x$issues) cli::cli_alert_danger(iss)
+    for (iss in x$issues) cli::cli_alert_danger("{iss}")
   }
   invisible(x)
 }

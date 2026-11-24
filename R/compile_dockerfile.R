@@ -12,11 +12,8 @@ format_base_image_ref <- function(base_image, r_version, base_digest = NULL, all
     }
   }
   if (!allow_unpinned) {
-    # Reject :latest or completely untagged/undigested images
-    has_digest <- grepl("@sha256:[0-9a-fA-F]{64}$", img)
-    has_tag <- grepl(":[^/@]+($|@)", img)
-    is_latest <- grepl(":latest($|@)", img, ignore.case = TRUE)
-    if (is_latest || (!has_tag && !has_digest)) {
+    # Reject :latest or completely untagged/undigested images (handles registry ports like localhost:5000/img)
+    if (!has_pinned_image_tag_or_digest(img)) {
       cli::cli_abort(
         "Unpinned base image {.val {img}} is disallowed for reproducible capsules. Pin an explicit tag or @sha256 digest (or set {.code allow_unpinned = TRUE})."
       )
@@ -319,7 +316,17 @@ compile_dockerfile <- function(scan,
   if (scan$has_renv) {
     lines <- c(lines, "COPY renv.lock ./")
     if (".Rprofile" %in% scan$files$path) {
-      lines <- c(lines, "COPY .Rprofile ./")
+      has_rprofile_secret <- !is.null(scan$rprofile_hazards) &&
+        nrow(scan$rprofile_hazards) > 0L &&
+        any(scan$rprofile_hazards$hazard == "secret_in_rprofile")
+      if (has_rprofile_secret) {
+        cli::cli_warn(
+          "Skipping {.code COPY .Rprofile ./} in Dockerfile because a hardcoded secret was detected in {.path .Rprofile}. Add {.path .Rprofile} to {.path .dockerignore} before building."
+        )
+        lines <- c(lines, "# WARNING: Skipped COPY .Rprofile (hardcoded secret detected in .Rprofile; add .Rprofile to .dockerignore)")
+      } else {
+        lines <- c(lines, "COPY .Rprofile ./")
+      }
     }
     if ("renv/activate.R" %in% scan$files$path) {
       lines <- c(lines, "COPY renv/activate.R renv/activate.R")

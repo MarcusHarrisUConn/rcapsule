@@ -88,13 +88,74 @@ build_r_package_purl <- function(pkg, version = NA_character_, source = "", is_b
   if (!is.null(ver_str)) paste0(base_purl, "@", purl_encode_seg(ver_str)) else base_purl
 }
 
-# Parse a Python PEP 508 requirement line into canonical PyPI name and exact version (if pinned with ==)
+# Parse a Python PEP 508 requirement line (or VCS/URL spec) into canonical SBOM fields
+# Returns NULL for empty, comment-only, flag-only, or marker-only lines that have no package name
 parse_pypi_spec <- function(spec) {
   clean <- trimws(as.character(spec))
   # Strip environment markers after ';'
   clean <- trimws(sub(";.*$", "", clean))
-  # Extract distribution name (before extras [...] or version specifier)
-  raw_name <- sub("^([A-Za-z0-9._-]+).*$", "\\1", clean, perl = TRUE)
+  if (!nzchar(clean) || startsWith(clean, "-") || startsWith(clean, "#")) {
+    return(NULL)
+  }
+
+  # Handle PEP 508 direct URL reference: "pkg[extra] @ https://..." or "pkg @ git+https://..."
+  if (grepl("\\A([A-Za-z0-9][A-Za-z0-9._-]*)\\s*(?:\\[[^\\]]*\\])?\\s*@\\s*\\S+", clean, perl = TRUE)) {
+    m <- regmatches(
+      clean,
+      regexec("\\A([A-Za-z0-9][A-Za-z0-9._-]*)\\s*(?:\\[[^\\]]*\\])?\\s*@\\s*(\\S+)", clean, perl = TRUE)
+    )[[1L]]
+    raw_name <- m[[2L]]
+    norm_name <- tolower(gsub("[-_.]+", "-", raw_name))
+    return(list(name = raw_name, purl_name = norm_name, purl_type = "pypi", version = NA_character_, spec = spec))
+  }
+
+  # Handle bare VCS or HTTP(S) URLs (e.g., git+https://github.com/org/repo.git@v1#egg=pkg)
+  if (grepl("\\A(?:(?:git|hg|svn|bzr)\\+)?https?://", clean, ignore.case = TRUE, perl = TRUE)) {
+    ver <- NA_character_
+    # Extract optional @ref before #fragment (after host path)
+    no_frag <- sub("#.*$", "", clean)
+    path_after_scheme <- sub("\\A(?:(?:git|hg|svn|bzr)\\+)?https?://[^/]+", "", no_frag, ignore.case = TRUE, perl = TRUE)
+    if (grepl("@([A-Za-z0-9._+-]+)\\z", path_after_scheme, perl = TRUE)) {
+      vm <- regmatches(path_after_scheme, regexec("@([A-Za-z0-9._+-]+)\\z", path_after_scheme, perl = TRUE))[[1L]]
+      if (length(vm) >= 2L && nzchar(vm[[2L]])) {
+        ver <- vm[[2L]]
+      }
+    }
+    # Prefer explicit #egg=<name> fragment when present
+    if (grepl("#[^\\s]*egg=([A-Za-z0-9][A-Za-z0-9._-]*)", clean, perl = TRUE)) {
+      em <- regmatches(clean, regexec("#[^\\s]*egg=([A-Za-z0-9][A-Za-z0-9._-]*)", clean, perl = TRUE))[[1L]]
+      raw_name <- em[[2L]]
+      norm_name <- tolower(gsub("[-_.]+", "-", raw_name))
+      return(list(name = raw_name, purl_name = norm_name, purl_type = "pypi", version = ver, spec = spec))
+    }
+    # Fall back to repository slug as a generic PURL component
+    base_url <- sub("@[^@/]*\\z", "", path_after_scheme, perl = TRUE)
+    base_url <- sub("\\.git\\z", "", base_url, ignore.case = TRUE, perl = TRUE)
+    segs <- strsplit(base_url, "/", fixed = TRUE)[[1L]]
+    segs <- segs[nzchar(segs)]
+    if (length(segs) == 0L) {
+      return(NULL)
+    }
+    slug <- gsub("[^A-Za-z0-9._-]+", "-", segs[[length(segs)]])
+    slug <- gsub("\\A[-._]+|[-._]+\\z", "", slug, perl = TRUE)
+    if (!nzchar(slug)) {
+      return(NULL)
+    }
+    return(list(
+      name = slug,
+      purl_name = tolower(gsub("[-_.]+", "-", slug)),
+      purl_type = "generic",
+      version = ver,
+      spec = spec
+    ))
+  }
+
+  # Standard PEP 508 distribution requirement (e.g., numpy==1.26.4, scipy[all]>=1.11)
+  if (!grepl("\\A([A-Za-z0-9][A-Za-z0-9._-]*)", clean, perl = TRUE)) {
+    return(NULL)
+  }
+  m_name <- regmatches(clean, regexec("\\A([A-Za-z0-9][A-Za-z0-9._-]*)", clean, perl = TRUE))[[1L]]
+  raw_name <- m_name[[2L]]
   norm_name <- tolower(gsub("[-_.]+", "-", raw_name))
   ver <- NA_character_
   if (grepl("==\\s*([A-Za-z0-9._+-]+)", clean, perl = TRUE)) {
@@ -103,7 +164,7 @@ parse_pypi_spec <- function(spec) {
       ver <- m[[2L]]
     }
   }
-  list(name = raw_name, purl_name = norm_name, version = ver, spec = spec)
+  list(name = raw_name, purl_name = norm_name, purl_type = "pypi", version = ver, spec = spec)
 }
 
 # Canonical metadata for detected compiled & scientific toolchains
@@ -194,8 +255,10 @@ export_sbom <- function(path = ".",
     serial_number <- generate_uuid_urn()
   } else {
     serial_number <- as.character(serial_number)
-    uuid_pat <- "^urn:uuid:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
-    if (length(serial_number) != 1L || is.na(serial_number) || !grepl(uuid_pat, serial_number, perl = TRUE)) {
+    uuid_pat <- "\\Aurn:uuid:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\z"
+    if (length(serial_number) != 1L || is.na(serial_number) ||
+      grepl("[\\x00-\\x1f\\x7f]", serial_number, perl = TRUE) ||
+      !grepl(uuid_pat, serial_number, perl = TRUE)) {
       cli::cli_abort("{.arg serial_number} must be a valid RFC 4122 UUID URN (e.g., {.val urn:uuid:...}).")
     }
   }
@@ -306,7 +369,8 @@ export_sbom <- function(path = ".",
       }
       comp$purl <- purl
       comp$scope <- if (p_req) "required" else "optional"
-      if (is.list(renv_entry) && !is.null(renv_entry$Hash) && grepl("^[0-9a-fA-F]{32}$", renv_entry$Hash)) {
+      if (is.list(renv_entry) && is.character(renv_entry$Hash) && length(renv_entry$Hash) == 1L &&
+        !is.na(renv_entry$Hash) && grepl("\\A[0-9a-fA-F]{32}\\z", renv_entry$Hash, perl = TRUE)) {
         comp$hashes <- list(list(alg = "MD5", content = tolower(as.character(renv_entry$Hash))))
       }
       comp$properties <- list(
@@ -358,19 +422,21 @@ export_sbom <- function(path = ".",
     }
   }
 
-  # 4. Python packages (PyPI)
+  # 4. Python packages (PyPI / VCS)
   py_specs <- sc$python_packages %||% character()
   n_py_pkgs <- 0L
   seen_py_refs <- character()
   if (length(py_specs) > 0L) {
     for (sp in py_specs) {
       parsed <- parse_pypi_spec(sp)
-      bref <- paste0("pypi:", parsed$purl_name)
+      if (is.null(parsed) || !nzchar(parsed$purl_name) || !nzchar(parsed$name)) next
+      ptype <- parsed$purl_type %||% "pypi"
+      bref <- paste0(ptype, ":", parsed$purl_name)
       if (bref %in% seen_py_refs) next
       seen_py_refs <- c(seen_py_refs, bref)
       n_py_pkgs <- n_py_pkgs + 1L
 
-      purl <- paste0("pkg:pypi/", purl_encode_seg(parsed$purl_name))
+      purl <- paste0("pkg:", ptype, "/", purl_encode_seg(parsed$purl_name))
       if (!is.na(parsed$version) && nzchar(parsed$version)) {
         purl <- paste0(purl, "@", purl_encode_seg(parsed$version))
       }
@@ -563,8 +629,10 @@ validate_sbom <- function(sbom, require_spec_version = "1.5") {
   }
 
   serial <- bom$serialNumber %||% ""
-  uuid_pat <- "^urn:uuid:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
-  if (!is.character(serial) || length(serial) != 1L || !grepl(uuid_pat, serial, perl = TRUE)) {
+  uuid_pat <- "\\Aurn:uuid:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\z"
+  if (!is.character(serial) || length(serial) != 1L || is.na(serial) ||
+    grepl("[\\x00-\\x1f\\x7f]", serial, perl = TRUE) ||
+    !grepl(uuid_pat, serial, perl = TRUE)) {
     add_issue("CDX003", "serialNumber", "serialNumber must be a valid RFC 4122 UUID URN ('urn:uuid:...').")
   }
 
@@ -586,20 +654,23 @@ validate_sbom <- function(sbom, require_spec_version = "1.5") {
     add_issue("CDX005", "metadata", "metadata object is missing or not a JSON object.")
   } else {
     ts <- meta$timestamp %||% ""
-    if (!is.character(ts) || length(ts) != 1L || !grepl("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}", ts, perl = TRUE)) {
+    if (!is.character(ts) || length(ts) != 1L || is.na(ts) ||
+      grepl("[\\x00-\\x1f\\x7f]", ts, perl = TRUE) ||
+      !grepl("\\A\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:?\\d{2})?\\z", ts, perl = TRUE)) {
       add_issue("CDX006", "metadata.timestamp", "metadata.timestamp must be an ISO-8601 UTC timestamp.")
     }
     if (is.null(meta$tools) || !is.list(meta$tools)) {
       add_issue("CDX007", "metadata.tools", "metadata.tools is missing.")
     }
     rc <- meta$component
-    if (!is.list(rc) || !nzchar(as.character(rc$name %||% ""))) {
+    if (!is.list(rc) || !nzchar(as.character(rc$name %||% "")[[1L]])) {
       add_issue("CDX008", "metadata.component", "metadata.component must define a non-empty name.")
     } else {
-      if (!(as.character(rc$type %||% "") %in% valid_types)) {
-        add_issue("CDX009", "metadata.component.type", paste0("Invalid root component type: '", rc$type %||% "", "'."))
+      rc_type <- as.character(rc$type %||% "")[[1L]]
+      if (!(rc_type %in% valid_types)) {
+        add_issue("CDX009", "metadata.component.type", paste0("Invalid root component type: '", rc_type, "'."))
       }
-      rref <- as.character(rc[["bom-ref"]] %||% "")
+      rref <- as.character(rc[["bom-ref"]] %||% "")[[1L]]
       if (nzchar(rref)) {
         declared_refs <- c(declared_refs, rref)
       }
@@ -609,7 +680,7 @@ validate_sbom <- function(sbom, require_spec_version = "1.5") {
   # 3. Components list
   comps <- bom$components
   n_components <- 0L
-  purl_pat <- "^pkg:[a-z][a-z0-9.+-]*/[^\\s]+$"
+  purl_pat <- "\\Apkg:[a-z][a-z0-9.+-]*/[^\\s\\x00-\\x1f\\x7f]+\\z"
   valid_algs <- c("MD5", "SHA-1", "SHA-256", "SHA-384", "SHA-512", "SHA3-256", "SHA3-512", "BLAKE2b-256", "BLAKE2b-512", "BLAKE3")
 
   if (!is.null(comps)) {
@@ -625,9 +696,9 @@ validate_sbom <- function(sbom, require_spec_version = "1.5") {
           add_issue("CDX010", cpath, "Component entry must be an object.")
           next
         }
-        ctype <- as.character(cobj$type %||% "")
-        cname <- as.character(cobj$name %||% "")
-        cref <- as.character(cobj[["bom-ref"]] %||% "")
+        ctype <- if (is.character(cobj$type) && length(cobj$type) == 1L && !is.na(cobj$type)) cobj$type else ""
+        cname <- if (is.character(cobj$name) && length(cobj$name) == 1L && !is.na(cobj$name)) cobj$name else ""
+        cref <- if (is.character(cobj[["bom-ref"]]) && length(cobj[["bom-ref"]]) == 1L && !is.na(cobj[["bom-ref"]])) cobj[["bom-ref"]] else ""
 
         if (!(ctype %in% valid_types)) {
           add_issue("CDX011", paste0(cpath, ".type"), paste0("Invalid CycloneDX component type: '", ctype, "'."))
@@ -645,8 +716,10 @@ validate_sbom <- function(sbom, require_spec_version = "1.5") {
         }
         if (!is.null(cobj$purl)) {
           cpurl <- as.character(cobj$purl)
-          if (length(cpurl) != 1L || !grepl(purl_pat, cpurl, perl = TRUE)) {
-            add_issue("CDX014", paste0(cpath, ".purl"), paste0("Malformed Package URL (purl): '", cpurl, "'."))
+          if (length(cpurl) != 1L || is.na(cpurl) ||
+            grepl("[\\x00-\\x1f\\x7f]", cpurl, perl = TRUE) ||
+            !grepl(purl_pat, cpurl, perl = TRUE)) {
+            add_issue("CDX014", paste0(cpath, ".purl"), paste0("Malformed Package URL (purl): '", paste(cpurl, collapse = ","), "'."))
           }
         }
         if (!is.null(cobj$hashes)) {
@@ -655,9 +728,13 @@ validate_sbom <- function(sbom, require_spec_version = "1.5") {
           } else {
             for (j in seq_along(cobj$hashes)) {
               h <- cobj$hashes[[j]]
-              alg <- as.character(h$alg %||% "")
-              content <- as.character(h$content %||% "")
-              if (!(alg %in% valid_algs) || !grepl("^[0-9a-fA-F]{32,128}$", content, perl = TRUE)) {
+              if (!is.list(h)) {
+                add_issue("CDX015", paste0(cpath, ".hashes[", j, "]"), "Hash entry must be a {alg, content} object.")
+                next
+              }
+              alg <- if (is.character(h$alg) && length(h$alg) == 1L && !is.na(h$alg)) h$alg else ""
+              content <- if (is.character(h$content) && length(h$content) == 1L && !is.na(h$content)) h$content else ""
+              if (!(alg %in% valid_algs) || !grepl("\\A[0-9a-fA-F]{32,128}\\z", content, perl = TRUE)) {
                 add_issue("CDX015", paste0(cpath, ".hashes[", j, "]"), paste0("Invalid hash entry (alg='", alg, "')."))
               }
             }
@@ -678,7 +755,11 @@ validate_sbom <- function(sbom, require_spec_version = "1.5") {
       for (i in seq_along(deps)) {
         dobj <- deps[[i]]
         dpath <- paste0("dependencies[", i, "]")
-        ref <- as.character(dobj$ref %||% "")
+        if (!is.list(dobj)) {
+          add_issue("CDX016", dpath, "Dependency entry must be an object with 'ref' and optional 'dependsOn'.")
+          next
+        }
+        ref <- if (is.character(dobj$ref) && length(dobj$ref) == 1L && !is.na(dobj$ref)) dobj$ref else ""
         if (!nzchar(ref) || !(ref %in% declared_refs)) {
           add_issue("CDX017", paste0(dpath, ".ref"), paste0("Dependency ref '", ref, "' does not match any declared bom-ref."))
         }

@@ -416,9 +416,9 @@ print.rcapsule_diff <- function(x, ...) {
         r <- changed[i, ]
         msg <- paste0(r$path, " [", r$status, "] - ", r$details)
         if (r$status == "within_tolerance") {
-          cli::cli_alert_warning(msg)
+          cli::cli_alert_warning("{msg}")
         } else {
-          cli::cli_alert_danger(msg)
+          cli::cli_alert_danger("{msg}")
         }
       }
     }

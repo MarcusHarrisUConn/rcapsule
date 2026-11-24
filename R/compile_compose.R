@@ -86,6 +86,16 @@ compile_compose <- function(scan,
   }
   with_worker <- if (is.null(include_worker)) is_shiny else isTRUE(include_worker)
   with_proxy <- if (is.null(include_proxy)) is_shiny else isTRUE(include_proxy)
+  if (isTRUE(with_worker) && identical(primary_svc, "worker")) {
+    cli::cli_abort(
+      "{.arg service_name} cannot be {.val worker} when {.arg include_worker} is enabled; choose another service name or set {.code include_worker = FALSE}."
+    )
+  }
+  if (isTRUE(with_proxy) && identical(primary_svc, "proxy")) {
+    cli::cli_abort(
+      "{.arg service_name} cannot be {.val proxy} when {.arg include_proxy} is enabled; choose another service name or set {.code include_proxy = FALSE}."
+    )
+  }
   restart_raw <- restart_policy %||% if (is_shiny) "unless-stopped" else "no"
   res_cfg <- validate_compose_resources(cpus = cpus, memory_limit = memory_limit, restart_policy = restart_raw)
   cpus <- res_cfg$cpus
@@ -226,9 +236,8 @@ compile_compose <- function(scan,
   # Optional reverse proxy service (pinned Caddy tag)
   if (with_proxy) {
     validate_docker_image_ref(proxy_image, arg = "proxy_image")
-    if (grepl(":latest($|@)", proxy_image, ignore.case = TRUE) ||
-      (!grepl(":", proxy_image, fixed = TRUE) && !grepl("@sha256:", proxy_image, fixed = TRUE))) {
-      cli::cli_abort("{.arg proxy_image} must use an explicit pinned tag, not {.val {proxy_image}}.")
+    if (!has_pinned_image_tag_or_digest(proxy_image)) {
+      cli::cli_abort("{.arg proxy_image} must use an explicit pinned tag or @sha256 digest, not {.val {proxy_image}}.")
     }
     dep_list <- list()
     dep_list[[primary_svc]] <- list(condition = "service_healthy")

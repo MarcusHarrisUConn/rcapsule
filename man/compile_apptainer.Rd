@@ -48,8 +48,9 @@ untagged base images.}
 }
 \value{
 An S3 object of class \code{c("rcapsule_apptainer", "rcapsule_spec")}
-with fields \code{content}, \code{lines}, \code{base_image}, \code{sections}, \code{project_type},
-\code{path}, and \code{scan}.
+with fields \code{content}, \code{lines}, \code{base_image}, \code{r_version}, \code{sections},
+\code{project_type}, \code{path}, \code{def_path}, \code{sif_path}, \code{binds}, \code{def_sha256},
+\code{content_digest}, and \code{scan}.
 }
 \description{
 Generates an Apptainer/Singularity \code{.def} recipe from an \code{rcapsule_scan}

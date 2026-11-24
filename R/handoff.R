@@ -57,15 +57,18 @@ parse_apptainer_env_section <- function(lines) {
 #' @param entrypoint Optional override for the `%runscript` entrypoint.
 #' @param bind_paths Character vector of absolute HPC bind mount paths (default
 #'   `c("/scratch", "/work", "/data")`).
+#' @param output Optional file path to write the compiled `.def` recipe when
+#'   compiling or overriding settings.
 #' @param allow_unpinned Logical; if `FALSE` (default), rejects `:latest` or
 #'   untagged base images.
 #'
-#' @return An S3 object of class `rcapsule_apptainer_spec` (convertible to a
-#'   plain list via `as.list()`) with fields `schema_version`, `project_name`,
-#'   `project_type`, `r_version`, `bootstrap`, `base_image`, `workdir`,
-#'   `entrypoint`, `r_packages`, `apt_packages`, `python_packages`,
-#'   `toolchains`, `env_vars`, `bind_paths`, `runscript`, `test_commands`,
-#'   `def_content`, `def_sha256`, and `def_path`.
+#' @return An S3 object of class `c("rcapsule_apptainer_spec", "rcapsule")`
+#'   (convertible to a plain list via `as.list()`) with fields `schema_version`,
+#'   `project_name`, `project_type`, `r_version`, `bootstrap`, `base_image`,
+#'   `workdir`, `entrypoint`, `r_packages`, `apt_packages`, `python_packages`,
+#'   `toolchains`, `env_vars`, `bind_paths`, `binds`, `runscript`,
+#'   `test_commands`, `def_content`, `def_sha256`, `content_digest`,
+#'   `def_path`, and `sif_path`.
 #' @export
 #' @examples
 #' tmp <- tempfile("rcapsule_hpc_spec_")
@@ -85,6 +88,7 @@ as_apptainer_spec <- function(x,
                               workdir = "/capsule",
                               entrypoint = NULL,
                               bind_paths = c("/scratch", "/work", "/data"),
+                              output = NULL,
                               allow_unpinned = FALSE) {
   if (!is.character(bind_paths)) {
     cli::cli_abort("{.arg bind_paths} must be a character vector of absolute container mount paths.")
@@ -95,17 +99,26 @@ as_apptainer_spec <- function(x,
   bind_paths <- unique(bind_paths)
 
   has_overrides <- !is.null(base_image) || !is.null(r_version) || !is.null(base_digest) ||
-    !identical(workdir, "/capsule") || !is.null(entrypoint) || isTRUE(allow_unpinned)
+    !identical(cran_repo, "https://packagemanager.posit.co/cran/2026-01-15") ||
+    !identical(quarto_version, "1.5.57") ||
+    !identical(cmdstan_version, "2.35.0") ||
+    !identical(workdir, "/capsule") || !is.null(entrypoint) ||
+    !is.null(output) || isTRUE(allow_unpinned)
 
   app_obj <- NULL
   sc <- NULL
+  orig_def_path <- NULL
   if (inherits(x, "rcapsule_apptainer")) {
     sc <- x$scan
+    orig_def_path <- x$path
     if (!has_overrides) {
       app_obj <- x
     }
   } else if (inherits(x, "rcapsule_bundle")) {
     sc <- x$scan
+    if (!is.null(x$specs$apptainer)) {
+      orig_def_path <- x$specs$apptainer$path
+    }
     if (!has_overrides && !is.null(x$specs$apptainer)) {
       app_obj <- x$specs$apptainer
     }
@@ -120,7 +133,7 @@ as_apptainer_spec <- function(x,
   if (is.null(app_obj)) {
     app_obj <- compile_apptainer(
       scan = sc,
-      output = NULL,
+      output = output,
       base_image = base_image,
       r_version = r_version,
       base_digest = base_digest,
@@ -138,6 +151,19 @@ as_apptainer_spec <- function(x,
   r_pkgs <- sort(unique(sc$packages$package[!sc$packages$is_base & sc$packages$required]))
   apt_pkgs <- sort(unique(c("ca-certificates", sc$sysreqs$apt_package)))
   active_tcs <- sort(names(sc$toolchains)[vapply(sc$toolchains, function(t) isTRUE(t$detected), logical(1L))])
+  def_sha <- sha256_string(app_obj$content)
+  eff_def_path <- app_obj$path %||% orig_def_path
+  if (is.null(eff_def_path)) {
+    cand_def <- file.path(sc$project_path, "Apptainer.def")
+    if (fs::file_exists(cand_def)) {
+      eff_def_path <- as.character(fs::path_norm(cand_def))
+    }
+  }
+  eff_sif_path <- if (!is.null(eff_def_path)) {
+    sub("\\.def$", ".sif", eff_def_path, ignore.case = TRUE)
+  } else {
+    as.character(fs::path_norm(file.path(sc$project_path, paste0(sanitize_slug(sc$project_name), ".sif"))))
+  }
 
   structure(
     list(
@@ -155,13 +181,16 @@ as_apptainer_spec <- function(x,
       toolchains = active_tcs,
       env_vars = env_vars,
       bind_paths = bind_paths,
+      binds = bind_paths,
       runscript = extract_apptainer_section(app_obj$lines, "%runscript"),
       test_commands = extract_apptainer_section(app_obj$lines, "%test"),
       def_content = app_obj$content,
-      def_sha256 = sha256_string(app_obj$content),
-      def_path = app_obj$path
+      def_sha256 = def_sha,
+      content_digest = def_sha,
+      def_path = eff_def_path,
+      sif_path = eff_sif_path
     ),
-    class = "rcapsule_apptainer_spec"
+    class = c("rcapsule_apptainer_spec", "rcapsule")
   )
 }
 
@@ -331,7 +360,7 @@ verify_with_script <- function(script,
   runner_script <- file.path(real_sandbox, ".rcapsule_audit_runner.R")
   writeLines(boot_lines, runner_script, useBytes = TRUE)
 
-  eff_env <- env_vars
+  eff_env <- if (length(env_vars) > 0L) as.list(env_vars) else list()
   if (length(args) > 0L) {
     eff_env$RCAPSULE_AUDIT_ARGS <- to_canonical_json(as_json_array(as.character(args)))
   }
@@ -345,7 +374,7 @@ verify_with_script <- function(script,
   if (length(post_entries) > 0L) {
     post_rels <- rel_path(post_entries, real_sandbox)
     internal_mask <- post_rels %in% c(".rcapsule_audit_runner.R", ".rcapsule_audit_script.R") |
-      grepl("^\\.rcapsule_cache(/|$)", post_rels)
+      grepl("^\\.rcapsule_(cache|home)(/|$)", post_rels)
     cand_rels <- sort(post_rels[!internal_mask])
     for (rel in cand_rels) {
       fp <- file.path(real_sandbox, rel)

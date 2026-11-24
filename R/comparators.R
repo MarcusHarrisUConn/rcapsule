@@ -109,7 +109,7 @@ compare_exact_atomic <- function(a, b, label = "value") {
   list(ok = TRUE, detail = NULL)
 }
 
-# Compare two data.frames column by column with detailed row/column diagnostics
+# Compare two data.frames column by column (positionally to cover duplicate column names)
 compare_data_frames <- function(a, b, abs_tol = 0, rel_tol = 0, ignore_attributes = FALSE, label = "table") {
   if (nrow(a) != nrow(b)) {
     return(list(
@@ -133,21 +133,46 @@ compare_data_frames <- function(a, b, abs_tol = 0, rel_tol = 0, ignore_attribute
     }
     return(list(ok = FALSE, max_abs_diff = Inf, max_rel_diff = Inf, detail = msg))
   }
+  if (!isTRUE(ignore_attributes) && !identical(rownames(a), rownames(b))) {
+    return(list(
+      ok = FALSE,
+      max_abs_diff = Inf,
+      max_rel_diff = Inf,
+      detail = paste0(label, ": row.names mismatch")
+    ))
+  }
 
   max_abs <- 0
   max_rel <- 0
+  col_names <- names(a)
+  has_dup_cols <- anyDuplicated(col_names) > 0L
 
-  for (col in names(a)) {
-    ca <- a[[col]]
-    cb <- b[[col]]
-    col_lbl <- paste0(label, "$", col)
+  for (i in seq_len(ncol(a))) {
+    col <- col_names[[i]]
+    ca <- a[[i]]
+    cb <- b[[i]]
+    col_lbl <- if (has_dup_cols) paste0(label, "$", col, "[[", i, "]]") else paste0(label, "$", col)
     if (is.numeric(ca) && is.numeric(cb)) {
       res <- compare_numeric_vectors(ca, cb, abs_tol = abs_tol, rel_tol = rel_tol, label = col_lbl)
       if (!isTRUE(res$ok)) return(res)
       max_abs <- max(max_abs, res$max_abs_diff)
       max_rel <- max(max_rel, res$max_rel_diff)
-    } else if ((is.factor(ca) && is.factor(cb)) ||
-      (is.character(ca) && is.character(cb)) ||
+    } else if (is.factor(ca) && is.factor(cb)) {
+      if (!isTRUE(ignore_attributes)) {
+        if (!identical(is.ordered(ca), is.ordered(cb))) {
+          return(list(ok = FALSE, max_abs_diff = Inf, max_rel_diff = Inf,
+                      detail = paste0(col_lbl, ": ordered factor mismatch")))
+        }
+        if (!identical(levels(ca), levels(cb))) {
+          return(list(ok = FALSE, max_abs_diff = Inf, max_rel_diff = Inf,
+                      detail = paste0(col_lbl, ": factor levels mismatch")))
+        }
+      }
+      res <- compare_exact_atomic(ca, cb, label = col_lbl)
+      if (!isTRUE(res$ok)) {
+        return(list(ok = FALSE, max_abs_diff = max_abs, max_rel_diff = max_rel, detail = res$detail))
+      }
+    } else if ((is.character(ca) && is.character(cb)) ||
       (is.logical(ca) && is.logical(cb))) {
       res <- compare_exact_atomic(ca, cb, label = col_lbl)
       if (!isTRUE(res$ok)) {
@@ -197,7 +222,22 @@ compare_r_objects <- function(a, b, abs_tol = 0, rel_tol = 0, ignore_attributes 
   }
 
   # Date / POSIXt objects
-  if ((inherits(a, "Date") && inherits(b, "Date")) || (inherits(a, "POSIXt") && inherits(b, "POSIXt"))) {
+  if (inherits(a, "Date") && inherits(b, "Date")) {
+    return(compare_numeric_vectors(as.numeric(a), as.numeric(b), abs_tol = abs_tol, rel_tol = rel_tol, label = label))
+  }
+  if (inherits(a, "POSIXt") && inherits(b, "POSIXt")) {
+    if (!isTRUE(ignore_attributes)) {
+      tza <- as.character(attr(as.POSIXct(a), "tzone") %||% "")[[1L]]
+      tzb <- as.character(attr(as.POSIXct(b), "tzone") %||% "")[[1L]]
+      if (!identical(tza, tzb)) {
+        return(list(
+          ok = FALSE,
+          max_abs_diff = Inf,
+          max_rel_diff = Inf,
+          detail = paste0(label, ": POSIXt timezone mismatch ('", tza, "' vs '", tzb, "')")
+        ))
+      }
+    }
     return(compare_numeric_vectors(as.numeric(a), as.numeric(b), abs_tol = abs_tol, rel_tol = rel_tol, label = label))
   }
 
@@ -234,6 +274,27 @@ compare_r_objects <- function(a, b, abs_tol = 0, rel_tol = 0, ignore_attributes 
 
   # Recursive lists (named or positional, including deeply nested JSON/RDS objects)
   if (is.list(a) && is.list(b)) {
+    if (!isTRUE(ignore_attributes) && !identical(class(a), class(b))) {
+      return(list(
+        ok = FALSE,
+        max_abs_diff = Inf,
+        max_rel_diff = Inf,
+        detail = paste0(label, ": object type/class mismatch (", paste(class(a), collapse = "/"), " vs ", paste(class(b), collapse = "/"), ")")
+      ))
+    }
+    # Distinguish empty JSON object {} (named empty list) from empty JSON array [] (unnamed list)
+    if (length(a) == 0L && length(b) == 0L) {
+      if (!identical(is.null(names(a)), is.null(names(b)))) {
+        return(list(
+          ok = FALSE,
+          max_abs_diff = Inf,
+          max_rel_diff = Inf,
+          detail = paste0(label, ": list object vs array mismatch (empty named list vs unnamed list)")
+        ))
+      }
+      return(list(ok = TRUE, max_abs_diff = 0, max_rel_diff = 0, detail = NULL))
+    }
+
     na <- names(a)
     nb <- names(b)
     has_names_a <- !is.null(na) && any(nzchar(na))
@@ -316,8 +377,34 @@ compare_r_objects <- function(a, b, abs_tol = 0, rel_tol = 0, ignore_attributes 
     }
   }
 
-  # Atomic non-numeric types (character, logical, factor)
+  # Atomic non-numeric types (character, logical, factor, matrices/arrays)
   if (is.atomic(a) && is.atomic(b) && (identical(typeof(a), typeof(b)) || (is.factor(a) && is.factor(b)))) {
+    if (!identical(dim(a), dim(b))) {
+      da_s <- paste(dim(a) %||% length(a), collapse = "x")
+      db_s <- paste(dim(b) %||% length(b), collapse = "x")
+      return(list(ok = FALSE, max_abs_diff = Inf, max_rel_diff = Inf,
+                  detail = paste0(label, ": dimension mismatch (", da_s, " vs ", db_s, ")")))
+    }
+    if (!isTRUE(ignore_attributes)) {
+      if (!identical(names(a), names(b))) {
+        return(list(ok = FALSE, max_abs_diff = Inf, max_rel_diff = Inf,
+                    detail = paste0(label, ": vector names mismatch")))
+      }
+      if (!identical(dimnames(a), dimnames(b))) {
+        return(list(ok = FALSE, max_abs_diff = Inf, max_rel_diff = Inf,
+                    detail = paste0(label, ": dimnames mismatch")))
+      }
+      if (is.factor(a) && is.factor(b)) {
+        if (!identical(is.ordered(a), is.ordered(b))) {
+          return(list(ok = FALSE, max_abs_diff = Inf, max_rel_diff = Inf,
+                      detail = paste0(label, ": ordered factor mismatch")))
+        }
+        if (!identical(levels(a), levels(b))) {
+          return(list(ok = FALSE, max_abs_diff = Inf, max_rel_diff = Inf,
+                      detail = paste0(label, ": factor levels mismatch")))
+        }
+      }
+    }
     res <- compare_exact_atomic(a, b, label = label)
     return(list(
       ok = res$ok,

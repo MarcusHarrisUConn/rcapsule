@@ -27,8 +27,9 @@
 #'   untagged base images.
 #'
 #' @return An S3 object of class `c("rcapsule_apptainer", "rcapsule_spec")`
-#'   with fields `content`, `lines`, `base_image`, `sections`, `project_type`,
-#'   `path`, and `scan`.
+#'   with fields `content`, `lines`, `base_image`, `r_version`, `sections`,
+#'   `project_type`, `path`, `def_path`, `sif_path`, `binds`, `def_sha256`,
+#'   `content_digest`, and `scan`.
 #' @export
 #' @examples
 #' tmp <- tempfile("rcapsule_apptainer_")
@@ -315,15 +316,28 @@ compile_apptainer <- function(scan,
     written_path <- as.character(fs::path_norm(output))
   }
 
+  def_sha <- sha256_string(content)
+  sif_default <- if (!is.null(written_path)) {
+    sub("\\.def$", ".sif", written_path, ignore.case = TRUE)
+  } else {
+    file.path(scan$project_path, paste0(sanitize_slug(scan$project_name), ".sif"))
+  }
+
   structure(
     list(
       spec_type = "apptainer",
       content = content,
       lines = lines,
       base_image = base_ref,
+      r_version = r_ver,
       sections = c("%labels", "%files", "%environment", "%post", "%runscript", "%test"),
       project_type = scan$project_type,
       path = written_path,
+      def_path = written_path,
+      sif_path = sif_default,
+      def_sha256 = def_sha,
+      content_digest = def_sha,
+      binds = c("/scratch", "/work", "/data"),
       scan = scan
     ),
     class = c("rcapsule_apptainer", "rcapsule_spec")

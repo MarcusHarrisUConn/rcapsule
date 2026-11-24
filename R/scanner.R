@@ -178,10 +178,14 @@ parse_r_code_signals <- function(code_text, source_label = "<inline>") {
       if (is.symbol(fn)) {
         fn_name <- as.character(fn)
       } else if (is.call(fn) && length(fn) == 3L &&
+        is.symbol(fn[[1L]]) &&
         as.character(fn[[1L]]) %in% c("::", ":::")) {
         fn_ns <- as.character(fn[[2L]])
         fn_name <- as.character(fn[[3L]])
         pkgs <<- c(pkgs, fn_ns)
+      } else if (is.call(fn)) {
+        # Higher-order call such as scales::col_numeric("Blues", c(0, 1))(0.5)
+        walk_expr(fn)
       }
 
       # Handle pkg::fun / pkg:::fun directly when e itself is :: or :::
@@ -568,9 +572,10 @@ inspect_yaml_metadata <- function(meta, rel) {
 }
 
 # Parse requirements.txt into clean Python package specs
+# Per pip grammar, '#' starts a comment only at line start or after whitespace (preserving URL #egg= fragments)
 parse_requirements_txt <- function(path) {
   lines <- readLines(path, warn = FALSE, encoding = "UTF-8")
-  lines <- trimws(sub("#.*$", "", lines))
+  lines <- trimws(sub("(^|\\s+)#.*$", "", lines, perl = TRUE))
   lines <- lines[nzchar(lines) & !grepl("^-", lines)]
   unique(lines)
 }
@@ -584,17 +589,34 @@ parse_renv_lock <- function(path) {
   if (is.null(lock) || !is.list(lock)) {
     return(NULL)
   }
-  r_ver <- lock$R$Version %||% NULL
+  r_block <- if (is.list(lock$R)) lock$R else list()
+  r_ver <- r_block$Version %||% NULL
   if (!is.null(r_ver)) {
     r_ver <- validate_version_string(as.character(r_ver), arg = "renv.lock R$Version")
   }
-  repos <- lock$R$Repositories %||% list()
-  pkgs <- lock$Packages %||% list()
+  repos <- r_block$Repositories %||% list()
+  pkgs <- if (is.list(lock$Packages)) lock$Packages else list()
 
   pkg_rows <- lapply(names(pkgs), function(nm) {
     entry <- pkgs[[nm]]
+    if (!is.list(entry)) {
+      return(NULL)
+    }
     pkg_name <- as.character(entry$Package %||% nm)
     validate_r_package_names(pkg_name, arg = "renv.lock Package")
+
+    raw_ver <- entry$Version %||% NA_character_
+    ver_str <- if (length(raw_ver) == 1L && !is.na(raw_ver) && nzchar(as.character(raw_ver))) {
+      v_cand <- as.character(raw_ver)
+      if (!grepl("[\\x00-\\x1f\\x7f]", v_cand, perl = TRUE) &&
+        grepl("\\A[0-9]+([.\\-+~][0-9A-Za-z]+)*\\z", v_cand, perl = TRUE)) {
+        v_cand
+      } else {
+        NA_character_
+      }
+    } else {
+      NA_character_
+    }
 
     raw_src <- as.character(entry$Source %||% "renv.lock")
     remote_type <- entry$RemoteType %||% NULL
@@ -627,11 +649,12 @@ parse_renv_lock <- function(path) {
 
     list(
       package = pkg_name,
-      version = as.character(entry$Version %||% NA_character_),
+      version = ver_str,
       source = src_label,
       is_non_cran = is_non_cran
     )
   })
+  pkg_rows <- Filter(Negate(is.null), pkg_rows)
 
   pkg_tbl <- if (length(pkg_rows) > 0L) {
     tibble::tibble(
@@ -1227,7 +1250,7 @@ print.rcapsule_scan <- function(x, ...) {
       non_base$package,
       ifelse(is.na(non_base$version), "", paste0("@", non_base$version))
     )
-    cli::cli_text(paste(pkg_labels, collapse = ", "))
+    cli::cli_text("{paste(pkg_labels, collapse = ', ')}")
   } else {
     cli::cli_text("{.emph None detected (base R only)}")
   }
@@ -1235,7 +1258,7 @@ print.rcapsule_scan <- function(x, ...) {
   active_tc <- names(x$toolchains)[vapply(x$toolchains, function(t) isTRUE(t$detected), logical(1L))]
   cli::cli_h2("Detected Toolchains ({length(active_tc)})")
   if (length(active_tc) > 0L) {
-    cli::cli_text(paste(active_tc, collapse = ", "))
+    cli::cli_text("{paste(active_tc, collapse = ', ')}")
   } else {
     cli::cli_text("{.emph Standard R runtime only}")
   }
@@ -1243,7 +1266,7 @@ print.rcapsule_scan <- function(x, ...) {
   build_apt <- unique(x$sysreqs$apt_package[x$sysreqs$stage == "build"])
   cli::cli_h2("OS System Dependencies ({length(build_apt)} apt packages)")
   if (length(build_apt) > 0L) {
-    cli::cli_text(paste(build_apt, collapse = ", "))
+    cli::cli_text("{paste(build_apt, collapse = ', ')}")
   } else {
     cli::cli_text("{.emph None required}")
   }

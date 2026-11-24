@@ -15,6 +15,7 @@ as_apptainer_spec(
   workdir = "/capsule",
   entrypoint = NULL,
   bind_paths = c("/scratch", "/work", "/data"),
+  output = NULL,
   allow_unpinned = FALSE
 )
 }
@@ -43,16 +44,20 @@ path to a project directory.}
 \item{bind_paths}{Character vector of absolute HPC bind mount paths (default
 \code{c("/scratch", "/work", "/data")}).}
 
+\item{output}{Optional file path to write the compiled \code{.def} recipe when
+compiling or overriding settings.}
+
 \item{allow_unpinned}{Logical; if \code{FALSE} (default), rejects \verb{:latest} or
 untagged base images.}
 }
 \value{
-An S3 object of class \code{rcapsule_apptainer_spec} (convertible to a
-plain list via \code{as.list()}) with fields \code{schema_version}, \code{project_name},
-\code{project_type}, \code{r_version}, \code{bootstrap}, \code{base_image}, \code{workdir},
-\code{entrypoint}, \code{r_packages}, \code{apt_packages}, \code{python_packages},
-\code{toolchains}, \code{env_vars}, \code{bind_paths}, \code{runscript}, \code{test_commands},
-\code{def_content}, \code{def_sha256}, and \code{def_path}.
+An S3 object of class \code{c("rcapsule_apptainer_spec", "rcapsule")}
+(convertible to a plain list via \code{as.list()}) with fields \code{schema_version},
+\code{project_name}, \code{project_type}, \code{r_version}, \code{bootstrap}, \code{base_image},
+\code{workdir}, \code{entrypoint}, \code{r_packages}, \code{apt_packages}, \code{python_packages},
+\code{toolchains}, \code{env_vars}, \code{bind_paths}, \code{binds}, \code{runscript},
+\code{test_commands}, \code{def_content}, \code{def_sha256}, \code{content_digest},
+\code{def_path}, and \code{sif_path}.
 }
 \description{
 Converts an \code{rcapsule_scan}, \code{rcapsule_apptainer}, \code{rcapsule_bundle}, or

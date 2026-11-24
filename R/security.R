@@ -22,7 +22,10 @@ is_valid_r_pkg_name <- function(x) {
   if (!is.character(x) || length(x) == 0L) {
     return(logical())
   }
-  !is.na(x) & grepl("^[A-Za-z][A-Za-z0-9.]*[A-Za-z0-9]$", x, perl = TRUE) & !grepl("\\.\\.", x)
+  !is.na(x) &
+    !grepl("[\\x00-\\x1f\\x7f]", x, perl = TRUE) &
+    grepl("\\A[A-Za-z][A-Za-z0-9.]*[A-Za-z0-9]\\z", x, perl = TRUE) &
+    !grepl("\\.\\.", x)
 }
 
 validate_r_package_names <- function(pkgs, arg = "packages") {
@@ -42,7 +45,9 @@ validate_r_package_names <- function(pkgs, arg = "packages") {
 validate_apt_package_names <- function(pkgs, arg = "apt_packages") {
   if (length(pkgs) == 0L) return(character())
   pkgs <- as.character(pkgs)
-  bad <- is.na(pkgs) | !grepl("^[a-z0-9][a-z0-9+.\\-]+$", pkgs, perl = TRUE)
+  bad <- is.na(pkgs) |
+    grepl("[\\x00-\\x1f\\x7f]", pkgs, perl = TRUE) |
+    !grepl("\\A[a-z0-9][a-z0-9+.\\-]+\\z", pkgs, perl = TRUE)
   if (any(bad)) {
     bad_vals <- pkgs[bad]
     cli::cli_abort(
@@ -56,8 +61,10 @@ validate_apt_package_names <- function(pkgs, arg = "apt_packages") {
 validate_python_package_specs <- function(pkgs, arg = "python_packages") {
   if (length(pkgs) == 0L) return(character())
   pkgs <- as.character(pkgs)
-  pat <- "^[A-Za-z0-9][A-Za-z0-9._\\-\\[\\],]*((==|>=|<=|~=|!=|>|<)[A-Za-z0-9._*+\\-]+)?$"
-  bad <- is.na(pkgs) | !grepl(pat, pkgs, perl = TRUE)
+  pat <- "\\A[A-Za-z0-9][A-Za-z0-9._\\-\\[\\],]*((==|>=|<=|~=|!=|>|<)[A-Za-z0-9._*+\\-]+)?\\z"
+  bad <- is.na(pkgs) |
+    grepl("[\\x00-\\x1f\\x7f]", pkgs, perl = TRUE) |
+    !grepl(pat, pkgs, perl = TRUE)
   if (any(bad)) {
     bad_vals <- pkgs[bad]
     cli::cli_abort(
@@ -70,7 +77,7 @@ validate_python_package_specs <- function(pkgs, arg = "python_packages") {
 # Validate semantic/dotted version string (R, Quarto, CmdStan)
 validate_version_string <- function(x, arg = "version") {
   assert_no_control_chars(x, arg = arg)
-  if (!grepl("^[0-9]+(\\.[0-9]+){1,3}([\\-+.~][A-Za-z0-9.]+)?$", x, perl = TRUE)) {
+  if (!grepl("\\A[0-9]+(\\.[0-9]+){1,3}([\\-+.~][A-Za-z0-9.]+)?\\z", x, perl = TRUE)) {
     cli::cli_abort(
       "Invalid version string for {.arg {arg}}: {.val {x}}."
     )
@@ -106,16 +113,16 @@ validate_ppm_distro <- function(x, arg = "ppm_distro") {
 # Validate snapshot date YYYY-MM-DD for Posit Package Manager
 validate_snapshot_date <- function(x, arg = "ppm_date") {
   assert_no_control_chars(x, arg = arg)
-  if (!grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", x, perl = TRUE)) {
+  if (!grepl("\\A[0-9]{4}-[0-9]{2}-[0-9]{2}\\z", x, perl = TRUE)) {
     cli::cli_abort("{.arg {arg}} must be an ISO date 'YYYY-MM-DD', not {.val {x}}.")
   }
   x
 }
 
-# Validate Docker / OCI image reference (no whitespace, newlines, or shell metacharacters)
+# Validate Docker / OCI image reference (no whitespace, newlines, leading '-', or shell metacharacters)
 validate_docker_image_ref <- function(x, arg = "base_image") {
   assert_no_control_chars(x, arg = arg)
-  pat <- "^[a-zA-Z0-9][a-zA-Z0-9._/:\\-]*(?:@sha256:[0-9a-fA-F]{64})?$"
+  pat <- "\\A[a-zA-Z0-9][a-zA-Z0-9._/:\\-]*(?:@sha256:[0-9a-fA-F]{64})?\\z"
   if (!grepl(pat, x, perl = TRUE) || grepl("\\.\\.", x, fixed = TRUE)) {
     cli::cli_abort(
       "Invalid or unsafe container image reference in {.arg {arg}}: {.val {x}}."
@@ -124,11 +131,26 @@ validate_docker_image_ref <- function(x, arg = "base_image") {
   x
 }
 
+# Check whether an OCI/Docker image ref has a pinned non-latest tag or @sha256 digest
+# Correctly handles registry ports (e.g. localhost:5000/img is unpinned; localhost:5000/img:1.2 is pinned)
+has_pinned_image_tag_or_digest <- function(img) {
+  if (!is.character(img) || length(img) != 1L || is.na(img) || !nzchar(img)) {
+    return(FALSE)
+  }
+  if (grepl(":latest(\\z|@)", img, ignore.case = TRUE, perl = TRUE)) {
+    return(FALSE)
+  }
+  if (grepl("@sha256:[0-9a-fA-F]{64}\\z", img, perl = TRUE)) {
+    return(TRUE)
+  }
+  grepl(":[^/@]+(\\z|@)", img, perl = TRUE)
+}
+
 # Validate SHA-256 image digest
 validate_image_digest <- function(x, arg = "base_digest") {
   assert_no_control_chars(x, arg = arg)
-  dig <- if (grepl("^sha256:", x)) x else paste0("sha256:", x)
-  if (!grepl("^sha256:[0-9a-fA-F]{64}$", dig, perl = TRUE)) {
+  dig <- if (grepl("\\Asha256:", x, perl = TRUE)) x else paste0("sha256:", x)
+  if (!grepl("\\Asha256:[0-9a-fA-F]{64}\\z", dig, perl = TRUE)) {
     cli::cli_abort(
       "Invalid SHA-256 image digest in {.arg {arg}}: {.val {x}}."
     )
@@ -139,7 +161,7 @@ validate_image_digest <- function(x, arg = "base_digest") {
 # Validate pinned CRAN / Posit PPM HTTP(S) URL
 validate_cran_repo_url <- function(x, arg = "cran_repo") {
   assert_no_control_chars(x, arg = arg)
-  if (!grepl("^https?://[A-Za-z0-9._:/\\-]+$", x, perl = TRUE)) {
+  if (!grepl("\\Ahttps?://[A-Za-z0-9._:/\\-]+\\z", x, perl = TRUE)) {
     cli::cli_abort(
       "Invalid or unsafe repository URL in {.arg {arg}}: {.val {x}}."
     )
@@ -150,7 +172,7 @@ validate_cran_repo_url <- function(x, arg = "cran_repo") {
 # Validate Linux non-root runtime username
 validate_linux_username <- function(x, arg = "user") {
   assert_no_control_chars(x, arg = arg)
-  if (!grepl("^[a-z_][a-z0-9_-]{0,31}$", x, perl = TRUE)) {
+  if (!grepl("\\A[a-z_][a-z0-9_-]{0,31}\\z", x, perl = TRUE)) {
     cli::cli_abort(
       "Invalid Linux username in {.arg {arg}}: {.val {x}}."
     )
@@ -166,7 +188,7 @@ validate_linux_username <- function(x, arg = "user") {
 # Validate container absolute path (e.g., WORKDIR /capsule)
 validate_container_workdir <- function(x, arg = "workdir") {
   assert_no_control_chars(x, arg = arg)
-  if (!grepl("^/[A-Za-z0-9._/\\-]+$", x, perl = TRUE) || grepl("(^|/)\\.\\.(/|$)", x, perl = TRUE)) {
+  if (!grepl("\\A/[A-Za-z0-9._/\\-]+\\z", x, perl = TRUE) || grepl("(^|/)\\.\\.(/|\\z)", x, perl = TRUE)) {
     cli::cli_abort(
       "Invalid or unsafe container path in {.arg {arg}}: {.val {x}}."
     )
@@ -189,7 +211,7 @@ validate_safe_rel_spec_path <- function(x, arg = "entrypoint") {
   if (!nzchar(x)) {
     cli::cli_abort("{.arg {arg}} must be a non-empty relative path.")
   }
-  if (grepl("^(/|~|[A-Za-z]:)", x, perl = TRUE) || grepl("\\\\", x)) {
+  if (grepl("\\A(/|~|[A-Za-z]:)", x, perl = TRUE) || grepl("\\\\", x)) {
     cli::cli_abort(
       "Absolute or backslash path rejected in {.arg {arg}}: {.val {x}}."
     )
@@ -211,7 +233,7 @@ validate_safe_rel_spec_path <- function(x, arg = "entrypoint") {
 # Validate Compose service name
 validate_compose_service_name <- function(x, arg = "service_name") {
   assert_no_control_chars(x, arg = arg)
-  if (!grepl("^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$", x, perl = TRUE)) {
+  if (!grepl("\\A[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}\\z", x, perl = TRUE)) {
     cli::cli_abort(
       "Invalid Docker Compose service name in {.arg {arg}}: {.val {x}}."
     )
@@ -225,7 +247,7 @@ validate_image_tag <- function(x, arg = "image_tag") {
   if (identical(tolower(x), "latest")) {
     cli::cli_abort("{.arg {arg}} must be explicitly pinned and cannot be {.val latest}.")
   }
-  if (!grepl("^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$", x, perl = TRUE)) {
+  if (!grepl("\\A[A-Za-z0-9_][A-Za-z0-9._-]{0,127}\\z", x, perl = TRUE)) {
     cli::cli_abort("Invalid image tag in {.arg {arg}}: {.val {x}}.")
   }
   x
@@ -243,7 +265,8 @@ validate_env_vars <- function(env_vars, arg = "env_vars") {
   out <- list()
   for (i in seq_along(env_vars)) {
     nm <- nms[[i]]
-    if (!grepl("^[A-Za-z_][A-Za-z0-9_]*$", nm, perl = TRUE)) {
+    assert_no_control_chars(nm, arg = paste0(arg, " name"))
+    if (!grepl("\\A[A-Za-z_][A-Za-z0-9_]*\\z", nm, perl = TRUE)) {
       cli::cli_abort("Invalid environment variable name in {.arg {arg}}: {.val {nm}}.")
     }
     val <- as.character(env_vars[[i]])
@@ -256,19 +279,39 @@ validate_env_vars <- function(env_vars, arg = "env_vars") {
   out
 }
 
-# Validate Compose volume mount specification (block traversal, control chars, docker.sock, host root)
+# Validate Compose volume mount specification (block traversal, control chars, docker.sock, sensitive host dirs, empty targets)
 validate_compose_volume <- function(vol, arg = "volumes") {
   assert_no_control_chars(vol, arg = arg)
-  if (!grepl(":", vol, fixed = TRUE)) {
+  if (!grepl(":", vol, fixed = TRUE) || grepl(":\\z", vol, perl = TRUE)) {
     cli::cli_abort("Volume mount must use 'source:target[:mode]' format: {.val {vol}}.")
   }
   parts <- strsplit(vol, ":", fixed = TRUE)[[1L]]
+  if (!(length(parts) %in% c(2L, 3L))) {
+    cli::cli_abort("Volume mount must use 'source:target[:mode]' format: {.val {vol}}.")
+  }
   src <- parts[[1L]]
   dst <- parts[[2L]]
-  if (grepl("(^|/)\\.\\.(/|$)", src, perl = TRUE) || grepl("(^|/)\\.\\.(/|$)", dst, perl = TRUE)) {
+  if (!nzchar(src) || !nzchar(dst) || !startsWith(dst, "/")) {
+    cli::cli_abort("Volume mount requires non-empty source and absolute container target path: {.val {vol}}.")
+  }
+  if (length(parts) == 3L) {
+    mode_opts <- strsplit(parts[[3L]], ",", fixed = TRUE)[[1L]]
+    valid_modes <- c("ro", "rw", "z", "Z", "cached", "delegated", "consistent")
+    if (length(mode_opts) == 0L || any(!(mode_opts %in% valid_modes))) {
+      cli::cli_abort("Invalid volume mount mode in {.arg {arg}}: {.val {vol}}.")
+    }
+  }
+  if (grepl("(^|/)\\.\\.(/|\\z)", src, perl = TRUE) || grepl("(^|/)\\.\\.(/|\\z)", dst, perl = TRUE)) {
     cli::cli_abort("Path traversal ('..') rejected in volume mount: {.val {vol}}.")
   }
-  if (grepl("docker\\.sock$", src, ignore.case = TRUE) || identical(src, "/")) {
+  norm_src <- gsub("/+", "/", src)
+  if (nchar(norm_src) > 1L) {
+    norm_src <- sub("/+\\z", "", norm_src, perl = TRUE)
+  }
+  dangerous_exact <- c("/", "/etc", "/root", "/proc", "/sys", "/dev", "/var/run", "/run")
+  if (norm_src %in% dangerous_exact ||
+      grepl("\\A/(etc|root|proc|sys|dev|var/run|run)/", norm_src, perl = TRUE) ||
+      grepl("(docker|podman)\\.sock(/|\\z)", norm_src, ignore.case = TRUE, perl = TRUE)) {
     cli::cli_abort("Dangerous host volume mount rejected: {.val {vol}}.")
   }
   vol
@@ -278,12 +321,12 @@ validate_compose_volume <- function(vol, arg = "volumes") {
 validate_compose_resources <- function(cpus, memory_limit, restart_policy) {
   cpus_s <- as.character(cpus)
   assert_no_control_chars(cpus_s, arg = "cpus")
-  if (!grepl("^[0-9]+(\\.[0-9]+)?$", cpus_s, perl = TRUE) || as.numeric(cpus_s) <= 0) {
+  if (!grepl("\\A[0-9]+(\\.[0-9]+)?\\z", cpus_s, perl = TRUE) || as.numeric(cpus_s) <= 0) {
     cli::cli_abort("{.arg cpus} must be a positive numeric string (e.g., {.val 2.0}).")
   }
   mem_s <- as.character(memory_limit)
   assert_no_control_chars(mem_s, arg = "memory_limit")
-  if (!grepl("^[0-9]+[bBkKmMgG]?$", mem_s, perl = TRUE)) {
+  if (!grepl("\\A[0-9]+[bBkKmMgG]?\\z", mem_s, perl = TRUE)) {
     cli::cli_abort("{.arg memory_limit} must be a valid Docker memory spec (e.g., {.val 2G}, {.val 512M}).")
   }
   valid_restarts <- c("no", "always", "on-failure", "unless-stopped")
@@ -515,44 +558,55 @@ constant_time_equal <- function(a, b) {
 # Patterns identifying ambient credential/secret environment variables to scrub
 secret_env_var_patterns <- function() {
   c(
-    "^AWS_",
-    "^GITHUB_",
-    "^GH_",
-    "^GITLAB_",
-    "^OPENAI_",
-    "^ANTHROPIC_",
-    "^GEMINI_",
-    "^GOOGLE_API",
-    "^GOOGLE_APPLICATION_CREDENTIALS$",
-    "^AZURE_",
-    "^GCP_",
-    "^HF_TOKEN$",
-    "^HUGGING_FACE",
-    "^NPM_TOKEN$",
-    "^PYPI_",
-    "^DOCKER_",
-    "^SLACK_",
-    "^STRIPE_",
-    "^TWILIO_",
-    "^SENDGRID_",
-    "^DATABRICKS_",
-    "^SNOWFLAKE_",
-    "^PGPASSWORD$",
-    "^MYSQL_PWD$",
-    "^DATABASE_URL$",
-    "^CAPSULE_SIGNING_KEY$",
+    "\\AAWS_",
+    "\\AGITHUB_",
+    "\\AGH_",
+    "\\AGITLAB_",
+    "\\AOPENAI_",
+    "\\AANTHROPIC_",
+    "\\AGEMINI_",
+    "\\AGOOGLE_API",
+    "\\AGOOGLE_APPLICATION_CREDENTIALS\\z",
+    "\\AAZURE_",
+    "\\AGCP_",
+    "\\AHF_",
+    "\\AHUGGING_?FACE",
+    "\\ANPM_TOKEN\\z",
+    "\\APYPI_",
+    "\\ADOCKER_",
+    "\\ASLACK_",
+    "\\ASTRIPE_",
+    "\\ATWILIO_",
+    "\\ASENDGRID_",
+    "\\ADATABRICKS_",
+    "\\ASNOWFLAKE_",
+    "\\ACAPSULE_SIGNING_KEY\\z",
+    "\\APGPASS(WORD|FILE)\\z",
+    "\\AMYSQL_PWD\\z",
+    "\\ANETRC\\z",
+    "\\AKUBECONFIG\\z",
+    "DATABASE_URL",
+    "(POSTGRES|PG|MYSQL|MARIADB|REDIS|MONGO|MONGODB|RABBITMQ|AMQP|MSSQL|ORACLE|CLICKHOUSE)_(URL|URI|DSN|PASS|PWD|TOKEN|KEY)",
+    "(CONN_STR|CONNECTION_STRING)",
+    "(SSH|HMAC|S3|GROQ|COHERE|MISTRAL|DEEPSEEK|CLAUDE|REPLICATE|TOGETHER|PERPLEXITY|VOYAGE|PINECONE|DATADOG|SENTRY|DISCORD)_(KEY|TOKEN|SECRET|APIKEY)",
+    "AUTHORIZATION",
+    "\\AJWT(_|\\z)|_JWT(_|\\z)",
     "SECRET",
     "TOKEN",
     "PASSWORD",
     "PASSWD",
-    "API_KEY",
+    "_PASS\\z",
+    "_PWD\\z",
+    "API_?KEY",
     "ACCESS_KEY",
     "PRIVATE_KEY",
     "SIGNING_KEY",
+    "ENCRYPTION_KEY",
+    "CERT_KEY",
     "CREDENTIAL",
     "AUTH_KEY",
     "BEARER",
-    "_PAT$"
+    "\\APAT_|_PAT(\\z|_)"
   )
 }
 
@@ -601,21 +655,23 @@ escape_html_strict <- function(x) {
   htmltools::htmlEscape(safe_html_text(x), attribute = TRUE)
 }
 
-# Escape Markdown table cell text to prevent table breakage or raw HTML injection
+# Escape Markdown table cell text to prevent table breakage, code-span breakout, or raw HTML injection
 sanitize_markdown_cell <- function(x) {
   s <- safe_html_text(x)
   s <- gsub("[\\r\\n]+", " ", s, perl = TRUE)
   s <- gsub("<", "&lt;", s, fixed = TRUE)
   s <- gsub(">", "&gt;", s, fixed = TRUE)
+  s <- gsub("`", "&#96;", s, fixed = TRUE)
   s <- gsub("\\|", "\\\\|", s)
   s
 }
 
-# Escape Markdown inline text (titles, bullet items) to neutralize embedded HTML/script tags
+# Escape Markdown inline text (titles, bullet items) to neutralize embedded HTML/script tags and code-span breakout
 sanitize_markdown_inline <- function(x) {
   s <- safe_html_text(x)
   s <- gsub("[\\r\\n]+", " ", s, perl = TRUE)
   s <- gsub("<", "&lt;", s, fixed = TRUE)
   s <- gsub(">", "&gt;", s, fixed = TRUE)
+  s <- gsub("`", "&#96;", s, fixed = TRUE)
   s
 }

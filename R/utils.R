@@ -181,6 +181,18 @@ hmac_sha256 <- function(text, key) {
   as_plain_hex(openssl::sha256(utf8_bytes, key = key_bytes))
 }
 
+# Strip embedded userinfo credentials (e.g. PATs/passwords) from Git remote URLs
+sanitize_git_remote_url <- function(url) {
+  if (is.null(url) || !is.character(url) || length(url) != 1L || is.na(url) || !nzchar(url)) {
+    return(url)
+  }
+  # Strip scheme userinfo: https://user:token@github.com/org/repo.git -> https://github.com/org/repo.git
+  out <- sub("\\A([a-zA-Z][a-zA-Z0-9+.-]*://)[^/@]+@", "\\1", url, perl = TRUE)
+  # Strip password from SCP-style user:pass@host:path while preserving benign git@host:path
+  out <- sub("\\A([^:/@]+):[^/@]+@([^:/]+:)", "\\1@\\2", out, perl = TRUE)
+  out
+}
+
 # Inspect git metadata for a project directory safely
 detect_git_info <- function(path) {
   default_info <- list(
@@ -237,7 +249,7 @@ detect_git_info <- function(path) {
   remote_res <- run_git(c("config", "--get", "remote.origin.url"))
   remote <- if (!is.null(remote_res) && identical(remote_res$status, 0L) &&
     nzchar(trimws(remote_res$stdout))) {
-    trimws(remote_res$stdout)
+    sanitize_git_remote_url(trimws(remote_res$stdout))
   } else {
     NULL
   }
