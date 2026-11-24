@@ -136,9 +136,15 @@ test_that("diff_capsules accurately compares manifests across environments, inpu
     seed = 42L,
     tolerances = list(atol = 1e-3, rtol = 1e-3)
   )
-  # Simulate HPC environment differences in m2
-  m2$environment$r_version <- "4.5.0"
-  m2$environment$platform <- "x86_64-pc-linux-gnu"
+  # Simulate HPC environment differences in m2 (guaranteed distinct from host R/platform on all CI runners)
+  alt_r_ver <- if (identical(paste0(R.version$major, ".", R.version$minor), "4.5.0")) "4.4.1" else "4.5.0"
+  alt_platform <- if (grepl("linux", R.version$platform, ignore.case = TRUE)) {
+    "aarch64-apple-darwin23"
+  } else {
+    "x86_64-pc-linux-gnu"
+  }
+  m2$environment$r_version <- alt_r_ver
+  m2$environment$platform <- alt_platform
   m2$environment$packages <- list(list(package = "jsonlite", version = "2.1.0", source = "renv"))
   m2$environment$toolchains <- list("cpp")
 

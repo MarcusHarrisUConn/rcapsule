@@ -1,6 +1,6 @@
 Package: rcapsule
 Title: Reproducibility Capsules and Multi-Target Containerization for R
-Version: 0.5.0
+Version: 0.5.1
 Authors@R:
     person("Marcus", "Harris", , "marcus.harris.uconn@gmail.com", role = c("aut", "cre", "cph"))
 Description: Compiles R analysis projects, 'Quarto' manuscripts, 'R Markdown'

@@ -137,9 +137,9 @@ test_that("diagnose_reproducibility classifies every verification and diff root 
   d_tamp <- diagnose_reproducibility(v_tamp)
   expect_true("manifest_tampering" %in% d_tamp$findings$category)
 
-  # 3. Line-ending drift (CRLF vs LF)
+  # 3. Line-ending drift (CRLF vs LF — use binary writeBin so Windows never converts LF to CRLF)
   dir_crlf <- withr::local_tempdir()
-  writeLines("writeLines(c('a,b', '1,2'), 'out.csv', sep = '\\n')", file.path(dir_crlf, "run.R"))
+  writeLines("writeBin(charToRaw('a,b\\n1,2\\n'), 'out.csv')", file.path(dir_crlf, "run.R"))
   # Reference file written with Windows CRLF
   writeBin(charToRaw("a,b\r\n1,2\r\n"), file.path(dir_crlf, "out.csv"))
   m_crlf <- create_capsule_manifest(dir_crlf, outputs = "out.csv", seed = 1L)
@@ -219,9 +219,15 @@ test_that("diagnose_reproducibility classifies every verification and diff root 
   diag_diff_same <- diagnose_reproducibility(d_same)
   expect_equal(diag_diff_same$n_findings, 0L)
 
+  alt_r_ver <- if (identical(paste0(R.version$major, ".", R.version$minor), "4.5.0")) "4.4.1" else "4.5.0"
+  alt_platform <- if (grepl("linux", R.version$platform, ignore.case = TRUE)) {
+    "aarch64-apple-darwin23"
+  } else {
+    "x86_64-pc-linux-gnu"
+  }
   m_other <- m_ok
-  m_other$environment$r_version <- "4.5.0"
-  m_other$environment$platform <- "x86_64-pc-linux-gnu"
+  m_other$environment$r_version <- alt_r_ver
+  m_other$environment$platform <- alt_platform
   m_other$rng$seed <- 99L
   m_other$project$git$commit <- "deadbeef"
   m_other$artifacts$inputs[[1L]]$sha256 <- strrep("a", 64L)

@@ -149,15 +149,20 @@ test_that("path-traversal and symlink-escape confinement holds across scan, mani
   )
   write.csv(data.frame(x = 1:2), file.path(proj, "out.csv"), row.names = FALSE)
 
-  # Create symlink inside project pointing outside project root
+  # Create symlink inside project pointing outside project root (guard for unprivileged Windows)
   link_path <- file.path(proj, "escape_link.R")
-  fs::link_create(secret_file, link_path)
+  has_symlink <- tryCatch({
+    fs::link_create(secret_file, link_path)
+    TRUE
+  }, error = function(e) FALSE)
 
   # 1. scan_project skips external symlink and never parses its packages
-  sc <- scan_project(proj)
-  expect_false("secretoutsidepkg" %in% sc$packages$package)
-  expect_false("escape_link.R" %in% sc$files$path)
-  expect_true("escape_link.R" %in% sc$skipped_external_symlinks)
+  if (isTRUE(has_symlink)) {
+    sc <- scan_project(proj)
+    expect_false("secretoutsidepkg" %in% sc$packages$package)
+    expect_false("escape_link.R" %in% sc$files$path)
+    expect_true("escape_link.R" %in% sc$skipped_external_symlinks)
+  }
 
   # 2. create_capsule_manifest rejects .., external absolute path, and external symlinks
   expect_error(
@@ -168,10 +173,12 @@ test_that("path-traversal and symlink-escape confinement holds across scan, mani
     create_capsule_manifest(proj, inputs = outside_data),
     "escapes project root|outside project root"
   )
-  expect_error(
-    create_capsule_manifest(proj, inputs = "escape_link.R"),
-    "escapes project root"
-  )
+  if (isTRUE(has_symlink)) {
+    expect_error(
+      create_capsule_manifest(proj, inputs = "escape_link.R"),
+      "escapes project root"
+    )
+  }
 
   # 3. verify_capsule rejects crafted manifest with traversal paths in entrypoint/inputs/outputs
   m <- create_capsule_manifest(proj, outputs = "out.csv", seed = 1L)

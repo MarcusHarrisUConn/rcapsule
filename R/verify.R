@@ -177,8 +177,12 @@ build_sandbox_env <- function(sandbox_dir, seed = NULL, env_vars = list(), scrub
   fs::dir_create(sandbox_home)
 
   env$TZ <- "UTC"
-  env$LC_ALL <- "C.UTF-8"
-  env$LANG <- "C.UTF-8"
+  # POSIX UTF-8 locale pins deterministic serialization/sorting on Linux & macOS;
+  # on Windows UCRT, POSIX "C.UTF-8" is invalid and would downgrade R to non-UTF-8 C locale.
+  if (!identical(.Platform$OS.type, "windows")) {
+    env$LC_ALL <- "C.UTF-8"
+    env$LANG <- "C.UTF-8"
+  }
   env$RCAPSULE_SANDBOX <- "1"
   env$R_USER_CACHE_DIR <- file.path(sandbox_dir, ".rcapsule_cache")
   env$HOME <- sandbox_home
@@ -238,7 +242,11 @@ build_docker_run_args <- function(sandbox_dir, img, seed = NULL, env_vars = list
                                   runner_file = ".rcapsule_runner.R", network = "none") {
   validate_docker_image_ref(img, arg = "docker_image")
   assert_no_control_chars(sandbox_dir, arg = "sandbox_dir")
-  if (grepl(":", sandbox_dir, fixed = TRUE)) {
+  # Allow a single Windows drive-letter prefix (e.g. "C:/..." or "C:\..."),
+  # but reject any ':' elsewhere to prevent Docker -v mount option injection.
+  mount_dir <- gsub("\\\\", "/", sandbox_dir)
+  check_tail <- sub("\\A[A-Za-z]:/", "", mount_dir, perl = TRUE)
+  if (grepl(":", check_tail, fixed = TRUE)) {
     cli::cli_abort("Unsafe ':' character in {.arg sandbox_dir} for Docker volume mount: {.path {sandbox_dir}}.")
   }
   validate_safe_rel_spec_path(runner_file, arg = "runner_file")
@@ -264,7 +272,7 @@ build_docker_run_args <- function(sandbox_dir, img, seed = NULL, env_vars = list
   }
   c(
     run_args,
-    "-v", paste0(sandbox_dir, ":/capsule"),
+    "-v", paste0(mount_dir, ":/capsule"),
     "-w", "/capsule",
     img,
     "Rscript", "--vanilla", runner_file

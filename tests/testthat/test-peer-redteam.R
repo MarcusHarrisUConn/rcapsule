@@ -355,6 +355,13 @@ test_that("[HIGH-6] Docker verification rejects CLI flag injection in docker_ima
     build_docker_run_args("/tmp/bad:dir", "rocker/r-ver:4.4.1", seed = 1L),
     "Unsafe ':' character"
   )
+  expect_error(
+    build_docker_run_args("C:\\Users\\bad:dir\\box", "rocker/r-ver:4.4.1", seed = 1L),
+    "Unsafe ':' character"
+  )
+  # Valid Windows drive-letter prefix (C:\...) is permitted and slash-normalized for Docker Desktop
+  argv_win <- build_docker_run_args("C:\\Users\\RUNNER~1\\Temp\\box", "rocker/r-ver:4.4.1", seed = 42L)
+  expect_true("C:/Users/RUNNER~1/Temp/box:/capsule" %in% argv_win)
 
   argv <- build_docker_run_args(td, "rocker/r-ver:4.4.1", seed = 42L)
   expect_true("--network=none" %in% argv)
@@ -468,26 +475,55 @@ test_that("[MEDIUM-4] compile_compose() aborts on service_name collisions with w
 })
 
 test_that("[MEDIUM-5] Backtick code-span breakout and HTML tags are escaped in certificates and README_REPRODUCE.md", {
-  td <- withr::local_tempdir()
-  bad <- "out`[link](javascript:alert(1))`<img src=x>.csv"
-  writeLines(sprintf("write.csv(data.frame(x = 1), %s, row.names = FALSE)", deparse(bad)), file.path(td, "run.R"))
-  utils::write.csv(data.frame(x = 1), file.path(td, bad), row.names = FALSE)
+  # Direct sanitizer checks run on every OS (including Windows where '<'/'>'/':' are illegal in filenames)
+  raw_payload <- "out`[link](javascript:alert(1))`<img src=x>.csv"
+  esc_inline <- sanitize_markdown_inline(raw_payload)
+  esc_cell <- sanitize_markdown_cell(paste0(raw_payload, "|col"))
+  expect_false(grepl("<img src=x>", esc_inline, fixed = TRUE))
+  expect_match(esc_inline, "&lt;img src=x&gt;", fixed = TRUE)
+  expect_match(esc_inline, "&#96;", fixed = TRUE)
+  expect_false(grepl("`", esc_inline, fixed = TRUE))
+  expect_false(grepl("<img src=x>", esc_cell, fixed = TRUE))
+  expect_match(esc_cell, "\\\\|", perl = TRUE)
+  expect_match(esc_cell, "&#96;", fixed = TRUE)
 
-  m <- create_capsule_manifest(td, outputs = bad, entrypoint = "run.R", seed = 1L)
+  # Cross-platform end-to-end test using a filename valid on Windows NTFS, macOS APFS, and Linux ext4
+  td <- withr::local_tempdir()
+  bad_win <- "out`[link](bad)`.csv"
+  writeLines(sprintf("write.csv(data.frame(x = 1), %s, row.names = FALSE)", deparse(bad_win)), file.path(td, "run.R"))
+  utils::write.csv(data.frame(x = 1), file.path(td, bad_win), row.names = FALSE)
+
+  m <- create_capsule_manifest(td, outputs = bad_win, entrypoint = "run.R", seed = 1L)
   v <- verify_capsule(m, path = td)
   cert <- render_certificate(v, format = "both")
 
-  # Backticks must be escaped as &#96; so no code-span breakout occurs
   expect_false(grepl("`out`\\[link\\]", cert$markdown, perl = TRUE))
   expect_match(cert$markdown, "&#96;", fixed = TRUE)
-  expect_false(grepl("<img src=x>", cert$markdown, fixed = TRUE))
 
   exp_dir <- file.path(withr::local_tempdir(), "bundle_out")
   export_capsule_bundle(td, output = exp_dir, format = "dir", manifest = m, verification = v)
   readme <- paste(readLines(file.path(exp_dir, "README_REPRODUCE.md")), collapse = "\n")
-  expect_false(grepl("<img src=x>", readme, fixed = TRUE))
-  expect_match(readme, "&lt;img src=x&gt;", fixed = TRUE)
   expect_match(readme, "&#96;", fixed = TRUE)
+
+  # Full HTML-tag filename round-trip on POSIX filesystems (NTFS forbids '<', '>', ':' in filenames)
+  if (!identical(.Platform$OS.type, "windows")) {
+    td_posix <- withr::local_tempdir()
+    writeLines(sprintf("write.csv(data.frame(x = 1), %s, row.names = FALSE)", deparse(raw_payload)), file.path(td_posix, "run.R"))
+    utils::write.csv(data.frame(x = 1), file.path(td_posix, raw_payload), row.names = FALSE)
+
+    m_p <- create_capsule_manifest(td_posix, outputs = raw_payload, entrypoint = "run.R", seed = 1L)
+    v_p <- verify_capsule(m_p, path = td_posix)
+    cert_p <- render_certificate(v_p, format = "both")
+    expect_false(grepl("<img src=x>", cert_p$markdown, fixed = TRUE))
+    expect_match(cert_p$markdown, "&#96;", fixed = TRUE)
+
+    exp_p <- file.path(withr::local_tempdir(), "bundle_posix")
+    export_capsule_bundle(td_posix, output = exp_p, format = "dir", manifest = m_p, verification = v_p)
+    readme_p <- paste(readLines(file.path(exp_p, "README_REPRODUCE.md")), collapse = "\n")
+    expect_false(grepl("<img src=x>", readme_p, fixed = TRUE))
+    expect_match(readme_p, "&lt;img src=x&gt;", fixed = TRUE)
+    expect_match(readme_p, "&#96;", fixed = TRUE)
+  }
 })
 
 test_that("[MEDIUM-6] export_sbom() handles PEP 508 markers & VCS URLs cleanly and validate_sbom() handles atomic JSON arrays", {

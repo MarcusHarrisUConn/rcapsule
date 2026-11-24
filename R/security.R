@@ -378,9 +378,12 @@ safe_yaml_read <- function(path) {
 # 2. Path-Traversal & Symlink-Escape Confinement
 # -----------------------------------------------------------------------------
 
-# Canonical real path with trailing slashes stripped (handles macOS /var -> /private/var)
+# Canonical real path with trailing slashes stripped (handles macOS /var -> /private/var and Windows 8.3 paths)
 canonical_real_dir <- function(path) {
   p <- as.character(fs::path_real(fs::path_abs(path)))
+  if (identical(.Platform$OS.type, "windows")) {
+    p <- tryCatch(normalizePath(p, winslash = "/", mustWork = TRUE), error = function(e) p)
+  }
   sub("/+$", "", gsub("\\\\", "/", p))
 }
 
@@ -388,6 +391,10 @@ canonical_real_dir <- function(path) {
 path_is_within_root <- function(real_child, real_root) {
   child_clean <- sub("/+$", "", gsub("\\\\", "/", as.character(real_child)))
   root_clean <- sub("/+$", "", gsub("\\\\", "/", as.character(real_root)))
+  if (identical(.Platform$OS.type, "windows")) {
+    child_clean <- tolower(child_clean)
+    root_clean <- tolower(root_clean)
+  }
   identical(child_clean, root_clean) || startsWith(child_clean, paste0(root_clean, "/"))
 }
 

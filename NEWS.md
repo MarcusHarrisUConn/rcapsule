@@ -1,3 +1,12 @@
+# rcapsule 0.5.1
+
+## Cross-Platform Windows & Linux CI Hardening
+
+- Fixed a Windows UCRT locale bug in `build_sandbox_env()` (`R/verify.R`) where setting POSIX `LC_ALL = "C.UTF-8"` / `LANG = "C.UTF-8"` downgraded Windows child R sessions to a non-UTF-8 `"C"` locale, altering RDS v3 header bytes during exact `SHA-256` verification of `.rds` artifacts.
+- Fixed `build_docker_run_args()` (`R/verify.R`) to permit valid Windows drive-letter prefixes (`C:\...` / `C:/...`, slash-normalized for Docker mounts) while still rejecting any `:` elsewhere in `sandbox_dir`.
+- Hardened `canonical_real_dir()`, `path_is_within_root()`, and `rel_path()` (`R/security.R`, `R/utils.R`) for Windows 8.3 short paths (`RUNNER~1` vs. long usernames), backslash normalization, and case-insensitive drive path comparisons.
+- Hardened cross-platform test fixtures in `tests/testthat/` against Linux host platform/R version collisions (`test-v030-workflows.R`, `test-v040-sbom-diagnose-handoff.R`), Windows text-mode CRLF line-ending translation (`test-v040-sbom-diagnose-handoff.R`), Windows NTFS illegal filename characters (`test-peer-redteam.R`), and unprivileged Windows symlink creation (`test-adversarial-security.R`).
+
 # rcapsule 0.5.0
 
 ## Security Hardening & Independent Peer Red-Team Remediation

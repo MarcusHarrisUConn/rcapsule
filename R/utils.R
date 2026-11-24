@@ -73,9 +73,15 @@ normalize_project_path <- function(path, must_exist = TRUE) {
   as.character(fs::path_norm(fs::path_abs(path)))
 }
 
-# Compute POSIX-style relative path with forward slashes
+# Compute POSIX-style relative path with forward slashes (consistent across Windows 8.3 short paths)
 rel_path <- function(path, start) {
-  rel <- as.character(fs::path_rel(fs::path_abs(path), start = fs::path_abs(start)))
+  p_abs <- fs::path_abs(path)
+  s_abs <- fs::path_abs(start)
+  if (identical(.Platform$OS.type, "windows")) {
+    p_abs <- normalizePath(as.character(p_abs), winslash = "/", mustWork = FALSE)
+    s_abs <- normalizePath(as.character(s_abs), winslash = "/", mustWork = FALSE)
+  }
+  rel <- as.character(fs::path_rel(p_abs, start = s_abs))
   gsub("\\\\", "/", rel)
 }
 
