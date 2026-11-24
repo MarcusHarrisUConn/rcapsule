@@ -104,14 +104,14 @@ writeLines(c("library(jsonlite)", "cat('ok\\n')"), file.path(tmp, "run.R"))
 spec <- as_apptainer_spec(tmp)
 spec
 #> 
-#> ── rcapsule Apptainer Spec Descriptor: rcapsule_hpc_spec_18be190505b4 ──────────
+#> ── rcapsule Apptainer Spec Descriptor: rcapsule_hpc_spec_19a92f96360e ──────────
 #> • Base image: "rocker/r-ver:4.6.2" (Bootstrap: docker)
 #> • Project type: "analysis" | R: "4.6.2" | Workdir: /capsule
 #> • Entrypoint: "run.R"
 #> • Dependencies: 1 R pkg(s), 1 apt pkg(s), 0 Python pkg(s)
 #> • Toolchains: standard R
 #> • HPC bind paths: /scratch, /work, /data
-#> • Recipe SHA-256: "1badce64f73d9d64"...
+#> • Recipe SHA-256: "804a8166dab9f6f4"...
 names(as.list(spec))
 #>  [1] "schema_version"  "project_name"    "project_type"    "r_version"      
 #>  [5] "bootstrap"       "base_image"      "workdir"         "entrypoint"     

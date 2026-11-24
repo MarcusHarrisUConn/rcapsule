@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rcapsule</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -45,6 +45,16 @@
       <small>Source: <a href="https://github.com/MarcusHarrisUConn/rcapsule/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.5.1" id="rcapsule-051">rcapsule 0.5.1<a class="anchor" aria-label="anchor" href="#rcapsule-051"></a></h2>
+<div class="section level3">
+<h3 id="cross-platform-windows--linux-ci-hardening-0-5-1">Cross-Platform Windows &amp; Linux CI Hardening<a class="anchor" aria-label="anchor" href="#cross-platform-windows--linux-ci-hardening-0-5-1"></a></h3>
+<ul><li>Fixed a Windows UCRT locale bug in <code>build_sandbox_env()</code> (<code>R/verify.R</code>) where setting POSIX <code>LC_ALL = "C.UTF-8"</code> / <code>LANG = "C.UTF-8"</code> downgraded Windows child R sessions to a non-UTF-8 <code>"C"</code> locale, altering RDS v3 header bytes during exact <code>SHA-256</code> verification of <code>.rds</code> artifacts.</li>
+<li>Fixed <code>build_docker_run_args()</code> (<code>R/verify.R</code>) to permit valid Windows drive-letter prefixes (<code>C:\...</code> / <code>C:/...</code>, slash-normalized for Docker mounts) while still rejecting any <code>:</code> elsewhere in <code>sandbox_dir</code>.</li>
+<li>Hardened <code>canonical_real_dir()</code>, <code>path_is_within_root()</code>, and <code>rel_path()</code> (<code>R/security.R</code>, <code>R/utils.R</code>) for Windows 8.3 short paths (<code>RUNNER~1</code> vs. long usernames), backslash normalization, and case-insensitive drive path comparisons.</li>
+<li>Hardened cross-platform test fixtures in <code>tests/testthat/</code> against Linux host platform/R version collisions (<code>test-v030-workflows.R</code>, <code>test-v040-sbom-diagnose-handoff.R</code>), Windows text-mode CRLF line-ending translation (<code>test-v040-sbom-diagnose-handoff.R</code>), Windows NTFS illegal filename characters (<code>test-peer-redteam.R</code>), and unprivileged Windows symlink creation (<code>test-adversarial-security.R</code>).</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.5.0" id="rcapsule-050">rcapsule 0.5.0<a class="anchor" aria-label="anchor" href="#rcapsule-050"></a></h2>
 <div class="section level3">

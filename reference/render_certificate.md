@@ -57,8 +57,8 @@ v <- verify_capsule(m, path = tmp)
 cert <- render_certificate(v, output = file.path(tmp, "certificate"))
 cert$files
 #>                                                      markdown 
-#>   "/tmp/Rtmp02i5dl/rcapsule_cert_18be14a86b9f/certificate.md" 
+#>   "/tmp/RtmpThAhiB/rcapsule_cert_19a96d8b495d/certificate.md" 
 #>                                                          html 
-#> "/tmp/Rtmp02i5dl/rcapsule_cert_18be14a86b9f/certificate.html" 
+#> "/tmp/RtmpThAhiB/rcapsule_cert_19a96d8b495d/certificate.html" 
 unlink(tmp, recursive = TRUE)
 ```

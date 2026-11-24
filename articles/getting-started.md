@@ -92,8 +92,8 @@ packages, OS system dependencies, and scientific toolchains:
 sc <- scan_project(proj_dir)
 sc
 #> 
-#> ── rcapsule Project Scan: rcapsule_vignette_study_1c1295a66f1 ──────────────────
-#> • Path: /tmp/RtmpRCMcT4/rcapsule_vignette_study_1c1295a66f1
+#> ── rcapsule Project Scan: rcapsule_vignette_study_1d0c7b9625bf ─────────────────
+#> • Path: /tmp/Rtmpj5Co9S/rcapsule_vignette_study_1d0c7b9625bf
 #> • Project type: "analysis" (roles: analysis)
 #> • R version: "4.6.2" | renv.lock: FALSE | DESCRIPTION: FALSE
 #> • Entrypoint: "run.R"
@@ -158,19 +158,19 @@ manifest <- create_capsule_manifest(
 
 manifest
 #> 
-#> ── rcapsule Provenance Manifest (cap_74eb8608c956) ─────────────────────────────
-#> • Schema: "1.0.0" | Created: "2026-11-24T21:06:14Z"
-#> • Project: "rcapsule_vignette_study_1c1295a66f1" (analysis) | Entrypoint:
+#> ── rcapsule Provenance Manifest (cap_43cc7d7d40a8) ─────────────────────────────
+#> • Schema: "1.0.0" | Created: "2026-11-24T21:45:03Z"
+#> • Project: "rcapsule_vignette_study_1d0c7b9625bf" (analysis) | Entrypoint:
 #> "run.R"
 #> • Git: not a git repository
-#> • Environment: R 4.6.2 | Digest: "528f6e0170b4"
+#> • Environment: R 4.6.2 | Digest: "6791a480dbe1"
 #> • RNG: seed=2026 | kind=Mersenne-Twister/Inversion/Rejection
 #> • Artifacts: 1 inputs, 1 scripts, 2 containers, 2 outputs
-#> • Integrity: digest="41c38ba12fae" | signed=TRUE
+#> • Integrity: digest="ab9ce38721b1" | signed=TRUE
 verify_manifest_integrity(file.path(proj_dir, "capsule.json"), key = signing_key)
 #> 
 #> ── rcapsule Manifest Integrity: VALID ──────────────────────────────────────────
-#> • Content digest: OK (41c38ba12fae)
+#> • Content digest: OK (ab9ce38721b1)
 #> • Signed: TRUE | Signature check: TRUE
 ```
 
@@ -186,9 +186,9 @@ tampered$artifacts$outputs[[1]]$sha256 <- paste(rep("0", 64), collapse = "")
 verify_manifest_integrity(tampered, key = signing_key)
 #> 
 #> ── rcapsule Manifest Integrity: INVALID ────────────────────────────────────────
-#> • Content digest: MISMATCH (e1dc00753373)
+#> • Content digest: MISMATCH (f2b70f486f4b)
 #> • Signed: TRUE | Signature check: FALSE
-#> ✖ Content digest mismatch (manifest was modified): recorded=41c38ba12fae, computed=e1dc00753373
+#> ✖ Content digest mismatch (manifest was modified): recorded=ab9ce38721b1, computed=f2b70f486f4b
 #> ✖ HMAC-SHA256 signature verification failed (invalid key or tampered manifest).
 ```
 
@@ -212,8 +212,8 @@ audit_exact <- verify_capsule(
 audit_exact
 #> 
 #> ── rcapsule Verification Audit: VERIFIED (EXACT SHA-256) ───────────────────────
-#> • Capsule: "cap_74eb8608c956" (rcapsule_vignette_study_1c1295a66f1)
-#> • Runner: "sandbox" | Entrypoint: "run.R" | Exit: 0 (0.219s)
+#> • Capsule: "cap_43cc7d7d40a8" (rcapsule_vignette_study_1d0c7b9625bf)
+#> • Runner: "sandbox" | Entrypoint: "run.R" | Exit: 0 (0.148s)
 #> • Manifest integrity: VALID
 #> • Inputs verified: 1/1
 #> • Scripts verified: 1/1
@@ -242,8 +242,8 @@ audit_tol <- verify_capsule(
 audit_tol
 #> 
 #> ── rcapsule Verification Audit: VERIFIED (WITHIN TOLERANCE) ────────────────────
-#> • Capsule: "cap_74eb8608c956" (rcapsule_vignette_study_1c1295a66f1)
-#> • Runner: "sandbox" | Entrypoint: "run.R" | Exit: 0 (0.234s)
+#> • Capsule: "cap_43cc7d7d40a8" (rcapsule_vignette_study_1d0c7b9625bf)
+#> • Runner: "sandbox" | Entrypoint: "run.R" | Exit: 0 (0.143s)
 #> • Manifest integrity: VALID
 #> • Inputs verified: 1/1
 #> • Scripts verified: 1/1
@@ -273,29 +273,29 @@ cert
 #> 
 #> ── rcapsule Verification Certificate ───────────────────────────────────────────
 #> • Title: "Reproducibility Verification Certificate:
-#> rcapsule_vignette_study_1c1295a66f1"
+#> rcapsule_vignette_study_1d0c7b9625bf"
 #> • Verdict: "VERIFIED (EXACT)"
 #> • Markdown: 1957 chars
-#> • HTML: 8890 chars
+#> • HTML: 8891 chars
 #> • Files:
-#> /tmp/RtmpRCMcT4/rcapsule_vignette_study_1c1295a66f1/reproducibility_certificate.md,
-#> /tmp/RtmpRCMcT4/rcapsule_vignette_study_1c1295a66f1/reproducibility_certificate.html
+#> /tmp/Rtmpj5Co9S/rcapsule_vignette_study_1d0c7b9625bf/reproducibility_certificate.md,
+#> /tmp/Rtmpj5Co9S/rcapsule_vignette_study_1d0c7b9625bf/reproducibility_certificate.html
 cat(substr(cert$markdown, 1, 900), "...\n")
-#> # Reproducibility Verification Certificate: rcapsule_vignette_study_1c1295a66f1
+#> # Reproducibility Verification Certificate: rcapsule_vignette_study_1d0c7b9625bf
 #> 
 #> > **Verification Verdict:** **VERIFIED (EXACT)**  
-#> > **Capsule ID:** `cap_74eb8608c956` | **Verified At:** `2026-11-24T21:06:14Z` | **Runner:** `sandbox` (0.219s)
+#> > **Capsule ID:** `cap_43cc7d7d40a8` | **Verified At:** `2026-11-24T21:45:03Z` | **Runner:** `sandbox` (0.148s)
 #> 
 #> ## 1. Provenance & Environment Summary
 #> 
 #> | Field | Recorded Value |
 #> | :--- | :--- |
-#> | Project | `rcapsule_vignette_study_1c1295a66f1` (`analysis`) |
+#> | Project | `rcapsule_vignette_study_1d0c7b9625bf` (`analysis`) |
 #> | Entrypoint | `run.R` |
 #> | Git Revision | Not a Git repository |
 #> | Manifest R Version | `4.6.2` |
-#> | Verification Host | R `4.6.2` on `x86_64-pc-linux-gnu` (`Linux 7.0.0-1020-azure`) |
-#> | Environment Digest | `528f6e0170b4` |
+#> | Verification Host | R `4.6.2` on `x86_64-pc-linux-gnu` (`Linux 7.0.0-1016-aws`) |
+#> | Environment Digest | `6791a480dbe1` |
 #> | Detected Toolchains | Standard R |
 #> | OS System Libraries | 0 apt packages |
 #> | RNG Configuration | Seed `2026` (`Mersenne-Twister / Inversion / Rejection`) |

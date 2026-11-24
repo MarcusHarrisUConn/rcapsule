@@ -117,8 +117,8 @@ res <- verify_with_script(
 res
 #> 
 #> ── rcapsule Isolated Script Audit: PASSED ──────────────────────────────────────
-#> • Script: audit_18be501ea92d.R (SHA-256: e292fbf19c2c...)
-#> • Exit status: 0 | Duration: 0.208s | Scrubbed env vars: 41
+#> • Script: audit_19a979760bd0.R (SHA-256: e292fbf19c2c...)
+#> • Exit status: 0 | Duration: 0.13s | Scrubbed env vars: 41
 #> • Created/modified artifacts: 1
 #> 
 #> ── Expected Output Checks ──

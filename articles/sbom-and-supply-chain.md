@@ -87,11 +87,11 @@ sbom
 ```
 
     #> 
-    #> ── rcapsule CycloneDX 1.5 SBOM: rcapsule_sbom_vig_1d2b673a6a26 ─────────────────
-    #> • Serial number: "urn:uuid:ce382ec6-8060-4d24-9fb3-a21500e1a462"
+    #> ── rcapsule CycloneDX 1.5 SBOM: rcapsule_sbom_vig_1e383e65acb7 ─────────────────
+    #> • Serial number: "urn:uuid:66bea8cc-b2d5-4023-a647-256d134e6c58"
     #> • Total components: 38 (R=5, apt=25, PyPI=2, toolchains=6)
     #> • Dependencies graph entries: 4
-    #> • Output file: /tmp/RtmpaqfJNb/rcapsule_sbom_vig_1d2b673a6a26/sbom.cdx.json
+    #> • Output file: /tmp/Rtmp5XRIRh/rcapsule_sbom_vig_1e383e65acb7/sbom.cdx.json
 
 Every component carries a standardized Package URL (`purl`) spanning
 CRAN, GitHub, Bioconductor, Debian `apt`, PyPI, and scientific
@@ -211,14 +211,14 @@ hpc_spec <- as_apptainer_spec(
 )
 hpc_spec
 #> 
-#> ── rcapsule Apptainer Spec Descriptor: rcapsule_sbom_vig_1d2b673a6a26 ──────────
+#> ── rcapsule Apptainer Spec Descriptor: rcapsule_sbom_vig_1e383e65acb7 ──────────
 #> • Base image: "rocker/r-ver:4.4.2" (Bootstrap: docker)
 #> • Project type: "quarto" | R: "4.4.2" | Workdir: /capsule
 #> • Entrypoint: "manuscript.qmd"
 #> • Dependencies: 5 R pkg(s), 25 apt pkg(s), 2 Python pkg(s)
 #> • Toolchains: cmdstan, cpp, latex, python, quarto
 #> • HPC bind paths: /scratch, /work, /projects
-#> • Recipe SHA-256: "e757c0ef02d96b70"...
+#> • Recipe SHA-256: "18e0cc9034ec3876"...
 plain_spec <- as.list(hpc_spec)
 plain_spec[c("schema_version", "base_image", "toolchains", "bind_paths")]
 #> $schema_version
@@ -268,8 +268,8 @@ audit <- verify_with_script(
 audit
 #> 
 #> ── rcapsule Isolated Script Audit: PASSED ──────────────────────────────────────
-#> • Script: external_check_1d2b79b79b9c.R (SHA-256: 3a7f75bd059c...)
-#> • Exit status: 0 | Duration: 0.194s | Scrubbed env vars: 41
+#> • Script: external_check_1e383c1389ec.R (SHA-256: 3a7f75bd059c...)
+#> • Exit status: 0 | Duration: 0.127s | Scrubbed env vars: 41
 #> • Created/modified artifacts: 1
 #> 
 #> ── Expected Output Checks ──

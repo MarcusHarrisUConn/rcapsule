@@ -25,5 +25,5 @@ A single logical value (`TRUE` if Docker is usable, `FALSE` otherwise).
 
 ``` r
 docker_available()
-#> [1] TRUE
+#> [1] FALSE
 ```

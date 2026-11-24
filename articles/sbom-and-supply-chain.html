@@ -21,7 +21,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rcapsule</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -167,11 +167,11 @@ remotes.</p>
 <span><span class="va">sbom</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/export_sbom.html">export_sbom</a></span><span class="op">(</span><span class="va">proj</span>, manifest <span class="op">=</span> <span class="va">manifest</span>, output <span class="op">=</span> <span class="va">sbom_path</span><span class="op">)</span></span>
 <span><span class="va">sbom</span></span></code></pre></div>
 <pre><code><span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">──</span> <span style="font-weight: bold;">rcapsule CycloneDX 1.5 SBOM: rcapsule_sbom_vig_1d2b673a6a26</span> <span style="color: #00BBBB;">─────────────────</span></span></span>
-<span><span class="co">#&gt; • Serial number: <span style="color: #0000BB;">"urn:uuid:ce382ec6-8060-4d24-9fb3-a21500e1a462"</span></span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">──</span> <span style="font-weight: bold;">rcapsule CycloneDX 1.5 SBOM: rcapsule_sbom_vig_1e383e65acb7</span> <span style="color: #00BBBB;">─────────────────</span></span></span>
+<span><span class="co">#&gt; • Serial number: <span style="color: #0000BB;">"urn:uuid:66bea8cc-b2d5-4023-a647-256d134e6c58"</span></span></span>
 <span><span class="co">#&gt; • Total components: <span style="color: #0000BB;">38</span> (R=5, apt=25, PyPI=2, toolchains=6)</span></span>
 <span><span class="co">#&gt; • Dependencies graph entries: <span style="color: #0000BB;">4</span></span></span>
-<span><span class="co">#&gt; • Output file: /tmp/RtmpaqfJNb/rcapsule_sbom_vig_1d2b673a6a26/sbom.cdx.json</span></span></code></pre>
+<span><span class="co">#&gt; • Output file: /tmp/Rtmp5XRIRh/rcapsule_sbom_vig_1e383e65acb7/sbom.cdx.json</span></span></code></pre>
 <p>Every component carries a standardized Package URL
 (<code>purl</code>) spanning CRAN, GitHub, Bioconductor, Debian
 <code>apt</code>, PyPI, and scientific toolchains, and the root
@@ -288,14 +288,14 @@ plain-list-convertible handoff contract:</p>
 <span><span class="op">)</span></span>
 <span><span class="va">hpc_spec</span></span>
 <span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">──</span> <span style="font-weight: bold;">rcapsule Apptainer Spec Descriptor: rcapsule_sbom_vig_1d2b673a6a26</span> <span style="color: #00BBBB;">──────────</span></span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">──</span> <span style="font-weight: bold;">rcapsule Apptainer Spec Descriptor: rcapsule_sbom_vig_1e383e65acb7</span> <span style="color: #00BBBB;">──────────</span></span></span>
 <span><span class="co">#&gt; • Base image: <span style="color: #0000BB;">"rocker/r-ver:4.4.2"</span> (Bootstrap: docker)</span></span>
 <span><span class="co">#&gt; • Project type: <span style="color: #0000BB;">"quarto"</span> | R: <span style="color: #0000BB;">"4.4.2"</span> | Workdir: <span style="color: #0000BB;">/capsule</span></span></span>
 <span><span class="co">#&gt; • Entrypoint: <span style="color: #0000BB;">"manuscript.qmd"</span></span></span>
 <span><span class="co">#&gt; • Dependencies: 5 R pkg(s), 25 apt pkg(s), 2 Python pkg(s)</span></span>
 <span><span class="co">#&gt; • Toolchains: cmdstan, cpp, latex, python, quarto</span></span>
 <span><span class="co">#&gt; • HPC bind paths: /scratch, /work, /projects</span></span>
-<span><span class="co">#&gt; • Recipe SHA-256: <span style="color: #0000BB;">"e757c0ef02d96b70"</span>...</span></span>
+<span><span class="co">#&gt; • Recipe SHA-256: <span style="color: #0000BB;">"18e0cc9034ec3876"</span>...</span></span>
 <span><span class="va">plain_spec</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">as.list</a></span><span class="op">(</span><span class="va">hpc_spec</span><span class="op">)</span></span>
 <span><span class="va">plain_spec</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"schema_version"</span>, <span class="st">"base_image"</span>, <span class="st">"toolchains"</span>, <span class="st">"bind_paths"</span><span class="op">)</span><span class="op">]</span></span>
 <span><span class="co">#&gt; $schema_version</span></span>
@@ -344,8 +344,8 @@ leakage of host credentials (<code>AWS_*</code>,
 <span><span class="va">audit</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">──</span> <span style="font-weight: bold;">rcapsule Isolated Script Audit: PASSED</span> <span style="color: #00BBBB;">──────────────────────────────────────</span></span></span>
-<span><span class="co">#&gt; • Script: <span style="color: #0000BB;">external_check_1d2b79b79b9c.R</span> (SHA-256: 3a7f75bd059c...)</span></span>
-<span><span class="co">#&gt; • Exit status: <span style="color: #0000BB;">0</span> | Duration: 0.194s | Scrubbed env vars: 41</span></span>
+<span><span class="co">#&gt; • Script: <span style="color: #0000BB;">external_check_1e383c1389ec.R</span> (SHA-256: 3a7f75bd059c...)</span></span>
+<span><span class="co">#&gt; • Exit status: <span style="color: #0000BB;">0</span> | Duration: 0.127s | Scrubbed env vars: 41</span></span>
 <span><span class="co">#&gt; • Created/modified artifacts: <span style="color: #0000BB;">1</span></span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; ── <span style="font-weight: bold;">Expected Output Checks</span> ──</span></span>

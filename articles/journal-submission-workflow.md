@@ -119,10 +119,10 @@ bundle <- build_capsule(
 
 bundle
 #> 
-#> ── rcapsule Bundle: rcapsule_journal_study_1c7b7fc20ef3 ────────────────────────
+#> ── rcapsule Bundle: rcapsule_journal_study_1d7d43b0b ───────────────────────────
 #> • Project type: "analysis" | Targets: dockerfile, compose, apptainer
 #> • Lint status: dockerfile=PASS, compose=PASS, apptainer=PASS
-#> • Manifest ID: "cap_caf34879cc46" (signed=TRUE)
+#> • Manifest ID: "cap_db43ab59baf0" (signed=TRUE)
 #> • Verification: "verified_exact"
 #> • Certificate: rendered
 ```
@@ -177,8 +177,8 @@ diff_report <- diff_capsules(
 diff_report
 #> 
 #> ── rcapsule Manifest Diff: OUTPUTS EQUIVALENT (DRIFT DETECTED) ─────────────────
-#> • Baseline (A): "Author (Laptop)" (cap_caf34879cc46)
-#> • Comparison (B): "Reviewer (Linux HPC)" (cap_0fb1ed8f32a2)
+#> • Baseline (A): "Author (Laptop)" (cap_db43ab59baf0)
+#> • Comparison (B): "Reviewer (Linux HPC)" (cap_f908f640471b)
 #> • Environment drift: TRUE (R: 4.6.2 -> 4.6.2; platform: x86_64-pc-linux-gnu ->
 #> x86_64-pc-linux-gnu)
 #> • RNG drift: seed=2026 -> 2026
@@ -255,10 +255,10 @@ exported <- export_capsule_bundle(
 exported
 #> 
 #> ── rcapsule Exported Supplement Bundle (zip) ───────────────────────────────────
-#> • Destination: /tmp/RtmpUp90gs/clinical_trial_supplement.zip
-#> • Capsule ID: "cap_caf34879cc46"
+#> • Destination: /tmp/Rtmpwfxmej/clinical_trial_supplement.zip
+#> • Capsule ID: "cap_db43ab59baf0"
 #> • Files bundled: 11 (9.7 KiB)
-#> • Archive SHA-256: "4dd1f6ebcae1"
+#> • Archive SHA-256: "48644b7916ee"
 exported$files
 #>  [1] "analysis.R"               "Apptainer.def"           
 #>  [3] "capsule_certificate.html" "capsule_certificate.md"  

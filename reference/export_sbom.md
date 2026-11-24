@@ -89,8 +89,8 @@ writeLines(c("library(jsonlite)", "library(stats)", "x <- 1:5"), file.path(tmp, 
 sbom <- export_sbom(tmp)
 sbom
 #> 
-#> ── rcapsule CycloneDX 1.5 SBOM: rcapsule_sbom_18be6d65cee8 ─────────────────────
-#> • Serial number: "urn:uuid:e89da382-6101-4cba-b683-dd4500b95c20"
+#> ── rcapsule CycloneDX 1.5 SBOM: rcapsule_sbom_19a97e864d83 ─────────────────────
+#> • Serial number: "urn:uuid:4a50c18b-7d4b-44e1-8887-08590c8b4485"
 #> • Total components: 2 (R=1, apt=0, PyPI=0, toolchains=1)
 #> • Dependencies graph entries: 1
 #> • Output file: <in memory>
