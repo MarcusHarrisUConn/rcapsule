@@ -160,6 +160,22 @@ grep("^(FROM|    R_REPOS=)", bundle$specs$dockerfile$lines, value = TRUE)
   strings in HTML/Markdown certificates, and sets a strict
   `Content-Security-Policy` header (`default-src 'none'`).
 
+# Software Supply Chain (SBOM), Drift Diagnostics & Ecosystem Handoffs
+
+In `rcapsule` 0.4.0+, capsules also emit CycloneDX 1.5 Software Bills of
+Materials (`export_sbom()`, `validate_sbom()`), automated root-cause drift
+diagnostics (`diagnose_reproducibility()`), structured HPC container
+descriptors (`as_apptainer_spec()`), and isolated external script audits
+(`verify_with_script()`):
+
+```{r sbom-and-handoff-demo}
+sbom <- export_sbom(demo, manifest = bundle$manifest)
+validate_sbom(sbom)$valid
+diagnose_reproducibility(bundle$verification)$primary_cause
+hpc_spec <- as_apptainer_spec(bundle)
+hpc_spec$base_image
+```
+
 # Exporting a Journal Peer-Review Supplement
 
 ```{r export-demo}
@@ -182,9 +198,10 @@ unlink(c(demo, zip_out), recursive = TRUE)
 1. Run `scan_project()` and eliminate any `.Rprofile` portability hazards.
 2. Compile and lint targets (`build_capsule(..., lint = TRUE)`).
 3. Record inputs, outputs, RNG seeds, and explicit Monte Carlo tolerances
-   (`atol`/`rtol`) in a signed `capsule.json`.
-4. Run `verify_capsule(..., strict_outputs = TRUE)` cleanly in an isolated
-   sandbox or Docker container.
+   (`atol`/`rtol`) in a signed `capsule.json`, and export a CycloneDX 1.5 SBOM
+   via `export_sbom()` + `validate_sbom()`.
+4. Run `verify_capsule(..., strict_outputs = TRUE)` (and `diagnose_reproducibility()`
+   on any discrepancy) cleanly in an isolated sandbox or Docker container.
 5. Export the peer-review bundle with `export_capsule_bundle()` and archive both
    the ZIP supplement and standalone HTML verification certificate alongside
    your manuscript.

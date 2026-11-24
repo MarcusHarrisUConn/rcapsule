@@ -37,6 +37,7 @@ articles:
       - multi-target-containers
       - journal-submission-workflow
       - troubleshooting-reproducibility
+      - sbom-and-supply-chain
 
 reference:
   - title: "End-to-End Orchestration & Supplement Export"
@@ -56,20 +57,21 @@ reference:
       - sysreqs_db
       - resolve_sysreqs
 
-  - title: "Multi-Target Container Compilers & Static Linter"
+  - title: "Multi-Target Container Compilers, HPC Handoff & Linter"
     desc: >
-      Generate and audit pinned, layer-cached Dockerfiles, multi-service
-      docker-compose.yml stacks, and HPC-ready Apptainer recipes.
+      Generate, export, and audit pinned, layer-cached Dockerfiles, multi-service
+      docker-compose.yml stacks, and HPC-ready Apptainer recipes and descriptors.
     contents:
       - compile_dockerfile
       - compile_compose
       - compile_apptainer
+      - as_apptainer_spec
       - lint_container_spec
 
-  - title: "Cryptographic Provenance Manifests & Cross-Run Diffing"
+  - title: "Cryptographic Provenance Manifests, SBOM & Cross-Run Diffing"
     desc: >
       Create, serialize, sign, verify, and diff tamper-evident capsule.json
-      manifests with SHA-256 hashes and keyed HMAC-SHA256 signatures.
+      manifests and CycloneDX 1.5 Software Bills of Materials (SBOMs).
     contents:
       - create_capsule_manifest
       - write_capsule_manifest
@@ -77,15 +79,19 @@ reference:
       - sign_manifest
       - verify_manifest_integrity
       - diff_capsules
+      - export_sbom
+      - validate_sbom
 
-  - title: "Reproducibility Verification & Certificates"
+  - title: "Reproducibility Verification, Diagnostics & Certificates"
     desc: >
-      Execute pipelines in isolated sandboxes or Docker containers, compare
-      outputs with exact and numeric-tolerance comparators, and render
-      publication-ready verification certificates.
+      Execute pipelines and external audit scripts in isolated sandboxes or
+      Docker containers, diagnose reproducibility drift with ranked remediations,
+      and render publication-ready verification certificates.
     contents:
       - verify_capsule
+      - verify_with_script
       - compare_artifacts
+      - diagnose_reproducibility
       - render_certificate
 
   - title: "Runtime Capability Checks"

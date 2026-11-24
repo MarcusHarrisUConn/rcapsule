@@ -18,9 +18,9 @@
 | Pillar | Key Functions | What It Does |
 | :--- | :--- | :--- |
 | **1. Project & Toolchain Scanner** | `scan_project()`, `sysreqs_db()`, `resolve_sysreqs()` | Parses R scripts (`library`, `pacman::p_load`, `xfun::pkg_attach`, `box::use`, `::`), Quarto/Rmd chunks, `DESCRIPTION`, `renv.lock` (including non-CRAN remotes), `_targets.R`, `here::here()`, `.Rprofile` hazards, and host architecture to resolve OS `apt` libraries and toolchains (`C++`, `CmdStan`, `TMB`/`RTMB`, `JAGS`, `Rust`, `Java`, `Python`, `Quarto`, `LaTeX`). |
-| **2. Multi-Target Container Compiler & Linter** | `compile_dockerfile()`, `compile_compose()`, `compile_apptainer()`, `lint_container_spec()` | Emits pinned, layer-cached multi-stage Dockerfiles (`platform`, Posit PPM binaries), hardened Shiny + worker + proxy Compose stacks, and HPC Apptainer `.def` recipes; statically audits specs for `:latest` tags, `curl\|sh`, root execution, `network_mode: host`, `docker.sock` mounts, and baked secrets. |
-| **3. Cryptographic Provenance & Cross-Run Diffing** | `create_capsule_manifest()`, `read_capsule_manifest()`, `write_capsule_manifest()`, `sign_manifest()`, `verify_manifest_integrity()`, `diff_capsules()` | Generates canonical UTF-8 `capsule.json` (schema v1.0.0) with Git state, environment digest, RNG kind/seed, `SHA-256` hashes, and constant-time `HMAC-SHA256` verification; diffs runs across machines (`Laptop` vs. `HPC`). |
-| **4. Isolated Auditor, Certificates & Bundler** | `verify_capsule()`, `compare_artifacts()`, `render_certificate()`, `export_capsule_bundle()`, `build_capsule()` | Re-runs pipelines in an isolated local sandbox (scrubbing ambient host credentials and detecting extra artifacts) or Docker container, compares CSV/TSV/JSON/RDS outputs with exact and `atol`/`rtol` comparators, renders CSP-hardened HTML5/Markdown certificates, and packages journal-ready ZIP supplements. |
+| **2. Multi-Target Container Compiler, HPC Handoff & Linter** | `compile_dockerfile()`, `compile_compose()`, `compile_apptainer()`, `as_apptainer_spec()`, `lint_container_spec()` | Emits pinned, layer-cached multi-stage Dockerfiles (`platform`, Posit PPM binaries), hardened Shiny + worker + proxy Compose stacks, HPC Apptainer `.def` recipes, and plain-list Apptainer descriptors for HPC orchestrators; statically audits specs for `:latest` tags, `curl\|sh`, root execution, `network_mode: host`, `docker.sock` mounts, and baked secrets. |
+| **3. Cryptographic Provenance, CycloneDX 1.5 SBOM & Diffing** | `create_capsule_manifest()`, `sign_manifest()`, `verify_manifest_integrity()`, `diff_capsules()`, `export_sbom()`, `validate_sbom()` | Generates canonical UTF-8 `capsule.json` (schema v1.0.0) with Git state, environment digest, RNG kind/seed, `SHA-256` hashes, and constant-time `HMAC-SHA256` verification; exports/validates CycloneDX 1.5 SBOMs (`pkg:cran`, `pkg:github`, `pkg:bioconductor`, `pkg:deb`, `pkg:pypi`, toolchains); diffs runs across machines (`Laptop` vs. `HPC`). |
+| **4. Isolated Auditor, Diagnostics, Certificates & Bundler** | `verify_capsule()`, `verify_with_script()`, `compare_artifacts()`, `diagnose_reproducibility()`, `render_certificate()`, `export_capsule_bundle()`, `build_capsule()` | Re-runs pipelines and external `.R` audit scripts in an isolated local sandbox (scrubbing ambient host credentials and detecting extra artifacts) or Docker container, compares CSV/TSV/JSON/RDS outputs with exact and `atol`/`rtol` comparators, classifies drift root causes with ranked remediations, renders CSP-hardened HTML5/Markdown certificates, and packages journal-ready ZIP supplements. |
 
 ## Installation
 
@@ -52,7 +52,14 @@ bundle <- build_capsule(
 # 2. Compare manifests across runs or machines
 diff_capsules("author_capsule.json", "reviewer_capsule.json")
 
-# 3. Export a zip-slip-safe journal peer-review supplement bundle
+# 3. Export & validate a CycloneDX 1.5 SBOM
+sbom <- export_sbom("path/to/project", manifest = bundle$manifest, output = "sbom.cdx.json")
+validate_sbom(sbom)
+
+# 4. Diagnose any verification failure or cross-machine drift
+diagnose_reproducibility(bundle$verification)
+
+# 5. Export a zip-slip-safe journal peer-review supplement bundle
 export_capsule_bundle(
   path         = "path/to/project",
   output       = "journal_supplement.zip",
@@ -68,6 +75,7 @@ export_capsule_bundle(
 - `vignette("multi-target-containers", package = "rcapsule")`: Compiling Quarto manuscripts, production Shiny + async worker Compose stacks, and Bayesian HPC Apptainer recipes.
 - `vignette("journal-submission-workflow", package = "rcapsule")`: Signed peer-review capsules, cross-machine `diff_capsules()`, and `export_capsule_bundle()`.
 - `vignette("troubleshooting-reproducibility", package = "rcapsule")`: Monte Carlo `atol`/`rtol` tolerances, `.Rprofile` traps, `targets` pipelines, and Apple Silicon vs. `amd64` builds.
+- `vignette("sbom-and-supply-chain", package = "rcapsule")`: CycloneDX 1.5 SBOMs, automated `diagnose_reproducibility()`, HPC `as_apptainer_spec()`, and isolated `verify_with_script()` audits.
 - See [ARCHITECTURE.md](ARCHITECTURE.md) and [SECURITY.md](SECURITY.md) for architecture and red-team security details.
 
 ## License

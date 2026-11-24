@@ -219,14 +219,43 @@ run_in_sandbox <- function(sandbox_dir, runner_script, env, timeout) {
   )
 }
 
+# Build docker run argument vector cleanly (testable offline without Docker daemon)
+build_docker_run_args <- function(sandbox_dir, img, seed = NULL, env_vars = list(), runner_file = ".rcapsule_runner.R") {
+  run_args <- c(
+    "run", "--rm",
+    "-e", "TZ=UTC",
+    "-e", "LC_ALL=C.UTF-8",
+    "-e", "LANG=C.UTF-8",
+    "-e", "RCAPSULE_SANDBOX=1"
+  )
+  if (!is.null(seed) && !is.na(seed)) {
+    run_args <- c(run_args, "-e", paste0("CAPSULE_SEED=", as.integer(seed)))
+  }
+  clean_user_env <- validate_env_vars(env_vars, arg = "env_vars")
+  if (length(clean_user_env) > 0L) {
+    for (nm in names(clean_user_env)) {
+      run_args <- c(run_args, "-e", paste0(nm, "=", clean_user_env[[nm]]))
+    }
+  }
+  c(
+    run_args,
+    "-v", paste0(sandbox_dir, ":/capsule"),
+    "-w", "/capsule",
+    img,
+    "Rscript", runner_file
+  )
+}
+
 # Execute pipeline inside a live Docker container
-run_in_docker <- function(root, sandbox_dir, docker_image, docker_tag, seed, env_vars, timeout) {
-  if (!docker_available()) {
+run_in_docker <- function(root, sandbox_dir, docker_image, docker_tag, seed, env_vars, timeout,
+                          runner_fn = processx::run, check_available = docker_available) {
+  if (!isTRUE(check_available())) {
     cli::cli_abort(
       "Docker daemon is not available. Use {.code runner = \"sandbox\"} for isolated local verification or start Docker."
     )
   }
   docker_bin <- unname(Sys.which("docker"))
+  if (!nzchar(docker_bin)) docker_bin <- "docker"
   t0 <- proc.time()[["elapsed"]]
 
   img <- docker_image
@@ -237,7 +266,7 @@ run_in_docker <- function(root, sandbox_dir, docker_image, docker_tag, seed, env
       cli::cli_abort("No {.arg docker_image} provided and no Dockerfile found at {.path {df_path}}.")
     }
     img <- docker_tag %||% paste0("rcapsule-verify-", tolower(substr(sha256_string(root), 1L, 10L)), ":audit")
-    b_res <- processx::run(
+    b_res <- runner_fn(
       command = docker_bin,
       args = c("build", "-t", img, "-f", df_path, root),
       timeout = timeout,
@@ -255,31 +284,8 @@ run_in_docker <- function(root, sandbox_dir, docker_image, docker_tag, seed, env
     }
   }
 
-  run_args <- c(
-    "run", "--rm",
-    "-e", "TZ=UTC",
-    "-e", "LC_ALL=C.UTF-8",
-    "-e", "LANG=C.UTF-8",
-    "-e", "RCAPSULE_SANDBOX=1"
-  )
-  if (!is.null(seed) && !is.na(seed)) {
-    run_args <- c(run_args, "-e", paste0("CAPSULE_SEED=", as.integer(seed)))
-  }
-  clean_user_env <- validate_env_vars(env_vars, arg = "env_vars")
-  if (length(clean_user_env) > 0L) {
-    for (nm in names(clean_user_env)) {
-      run_args <- c(run_args, "-e", paste0(nm, "=", clean_user_env[[nm]]))
-    }
-  }
-  run_args <- c(
-    run_args,
-    "-v", paste0(sandbox_dir, ":/capsule"),
-    "-w", "/capsule",
-    img,
-    "Rscript", ".rcapsule_runner.R"
-  )
-
-  r_res <- processx::run(
+  run_args <- build_docker_run_args(sandbox_dir, img, seed = seed, env_vars = env_vars)
+  r_res <- runner_fn(
     command = docker_bin,
     args = run_args,
     timeout = timeout,

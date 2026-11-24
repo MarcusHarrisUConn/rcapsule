@@ -7,13 +7,16 @@
 #' @section Main Workflows:
 #' - **Scan projects**: [scan_project()], [sysreqs_db()], [resolve_sysreqs()]
 #' - **Compile & lint containers**: [compile_dockerfile()],
-#'   [compile_compose()], [compile_apptainer()], [lint_container_spec()]
-#' - **Cryptographic manifests & diffing**: [create_capsule_manifest()],
+#'   [compile_compose()], [compile_apptainer()], [lint_container_spec()],
+#'   [as_apptainer_spec()]
+#' - **Cryptographic manifests, SBOM & diffing**: [create_capsule_manifest()],
 #'   [read_capsule_manifest()], [write_capsule_manifest()], [sign_manifest()],
-#'   [verify_manifest_integrity()], [diff_capsules()]
-#' - **Isolated verification & publishing**: [verify_capsule()],
-#'   [compare_artifacts()], [render_certificate()], [export_capsule_bundle()],
-#'   [build_capsule()]
+#'   [verify_manifest_integrity()], [diff_capsules()], [export_sbom()],
+#'   [validate_sbom()]
+#' - **Isolated verification, diagnostics & publishing**: [verify_capsule()],
+#'   [verify_with_script()], [compare_artifacts()],
+#'   [diagnose_reproducibility()], [render_certificate()],
+#'   [export_capsule_bundle()], [build_capsule()]
 #'
 #' @keywords internal
 "_PACKAGE"

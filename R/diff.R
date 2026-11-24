@@ -109,7 +109,7 @@ diff_artifact_category <- function(category, manifest_a, manifest_b, tol_spec) {
 
       raw_a <- decode_verified_snapshot(manifest_a, p, sha_a)
       raw_b <- decode_verified_snapshot(manifest_b, p, sha_b)
-      if (!is.null(raw_a) && !is.null(raw_b) && (abs_tol > 0 || rel_tol > 0)) {
+      if (!is.null(raw_a) && !is.null(raw_b)) {
         ext <- tools::file_ext(p)
         tmp_b <- tempfile("rcapsule_diff_b_", fileext = if (nzchar(ext)) paste0(".", ext) else "")
         writeBin(raw_b, tmp_b)

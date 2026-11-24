@@ -15,13 +15,16 @@ analysis repositories, Quarto manuscripts, R Markdown reports, R packages,
 \itemize{
 \item \strong{Scan projects}: \code{\link[=scan_project]{scan_project()}}, \code{\link[=sysreqs_db]{sysreqs_db()}}, \code{\link[=resolve_sysreqs]{resolve_sysreqs()}}
 \item \strong{Compile & lint containers}: \code{\link[=compile_dockerfile]{compile_dockerfile()}},
-\code{\link[=compile_compose]{compile_compose()}}, \code{\link[=compile_apptainer]{compile_apptainer()}}, \code{\link[=lint_container_spec]{lint_container_spec()}}
-\item \strong{Cryptographic manifests & diffing}: \code{\link[=create_capsule_manifest]{create_capsule_manifest()}},
+\code{\link[=compile_compose]{compile_compose()}}, \code{\link[=compile_apptainer]{compile_apptainer()}}, \code{\link[=lint_container_spec]{lint_container_spec()}},
+\code{\link[=as_apptainer_spec]{as_apptainer_spec()}}
+\item \strong{Cryptographic manifests, SBOM & diffing}: \code{\link[=create_capsule_manifest]{create_capsule_manifest()}},
 \code{\link[=read_capsule_manifest]{read_capsule_manifest()}}, \code{\link[=write_capsule_manifest]{write_capsule_manifest()}}, \code{\link[=sign_manifest]{sign_manifest()}},
-\code{\link[=verify_manifest_integrity]{verify_manifest_integrity()}}, \code{\link[=diff_capsules]{diff_capsules()}}
-\item \strong{Isolated verification & publishing}: \code{\link[=verify_capsule]{verify_capsule()}},
-\code{\link[=compare_artifacts]{compare_artifacts()}}, \code{\link[=render_certificate]{render_certificate()}}, \code{\link[=export_capsule_bundle]{export_capsule_bundle()}},
-\code{\link[=build_capsule]{build_capsule()}}
+\code{\link[=verify_manifest_integrity]{verify_manifest_integrity()}}, \code{\link[=diff_capsules]{diff_capsules()}}, \code{\link[=export_sbom]{export_sbom()}},
+\code{\link[=validate_sbom]{validate_sbom()}}
+\item \strong{Isolated verification, diagnostics & publishing}: \code{\link[=verify_capsule]{verify_capsule()}},
+\code{\link[=verify_with_script]{verify_with_script()}}, \code{\link[=compare_artifacts]{compare_artifacts()}},
+\code{\link[=diagnose_reproducibility]{diagnose_reproducibility()}}, \code{\link[=render_certificate]{render_certificate()}},
+\code{\link[=export_capsule_bundle]{export_capsule_bundle()}}, \code{\link[=build_capsule]{build_capsule()}}
 }
 }
 

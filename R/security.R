@@ -416,34 +416,43 @@ assert_confined_path <- function(p, root, must_exist = TRUE, arg = "path") {
     return(canonical_real_dir(cand))
   }
 
-  # Non-existent path: verify normalized path & nearest existing parent stay inside root
-  if (must_exist) {
-    # Check if it's outside root first to give security error rather than missing-file error
-    if (!path_is_within_root(cand, real_root)) {
-      cli::cli_abort(
-        "Path outside project root {.path {root}} is forbidden in {.arg {arg}}: {.path {p}}."
-      )
-    }
-    cli::cli_abort("Artifact path does not exist: {.path {p}}.")
-  }
-
-  # Walk up to nearest existing parent to check for symlink escapes
+  # Non-existent path: walk up to nearest existing parent and resolve symlinks first
+  # (prevents false rejections on macOS /var -> /private/var symlinked roots and catches dangling symlinks)
   cur <- cand
-  while (!fs::dir_exists(cur) && !identical(cur, fs::path_dir(cur))) {
-    cur <- as.character(fs::path_dir(cur))
+  repeat {
+    if (isTRUE(fs::is_link(cur))) {
+      if (!is_confined_existing_path(cur, real_root)) {
+        cli::cli_abort(
+          "Path or symlink escapes project root {.path {root}} in {.arg {arg}}: {.path {p}}."
+        )
+      }
+      if (isTRUE(tryCatch(fs::dir_exists(cur), error = function(e) FALSE))) {
+        break
+      }
+    } else if (isTRUE(tryCatch(fs::dir_exists(cur), error = function(e) FALSE))) {
+      break
+    }
+    parent_cur <- as.character(fs::path_dir(cur))
+    if (identical(cur, parent_cur)) {
+      break
+    }
+    cur <- parent_cur
   }
   real_parent <- tryCatch(canonical_real_dir(cur), error = function(e) NULL)
   if (is.null(real_parent) || !path_is_within_root(real_parent, real_root)) {
     cli::cli_abort(
-      "Path escapes project root {.path {root}} in {.arg {arg}}: {.path {p}}."
+      "Path outside project root {.path {root}} is forbidden in {.arg {arg}}: {.path {p}}."
     )
   }
   rel_tail <- if (identical(cur, cand)) "" else as.character(fs::path_rel(cand, start = cur))
   resolved <- if (nzchar(rel_tail)) file.path(real_parent, rel_tail) else real_parent
   if (!path_is_within_root(resolved, real_root)) {
     cli::cli_abort(
-      "Path escapes project root {.path {root}} in {.arg {arg}}: {.path {p}}."
+      "Path outside project root {.path {root}} is forbidden in {.arg {arg}}: {.path {p}}."
     )
+  }
+  if (must_exist) {
+    cli::cli_abort("Artifact path does not exist: {.path {p}}.")
   }
   as.character(fs::path_norm(resolved))
 }

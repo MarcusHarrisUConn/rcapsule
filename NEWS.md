@@ -1,3 +1,21 @@
+# rcapsule 0.4.0
+
+## New Research-Workflow Capabilities (Zero New Dependencies)
+
+- Added CycloneDX 1.5 Software Bill of Materials (SBOM) generation and validation via `export_sbom()` and `validate_sbom()`. Enumerates R packages (`pkg:cran/...`, `pkg:github/...`, `pkg:gitlab/...`, `pkg:bitbucket/...`, `pkg:bioconductor/...`) with `renv.lock` MD5 hashes, OS `apt` system libraries (`pkg:deb/debian/...`) linked to the R packages requiring them, Python packages (`pkg:pypi/...`), and compiled scientific toolchains (`R`, `CmdStan`, `Quarto`, `TinyTeX`, `JAGS`, `TMB/RTMB`, `C++`, `Rust`, `Python`, `OpenJDK`), cryptographically binding to `capsule.json`'s `SHA-256` content digest when provided.
+- Added automated reproducibility drift diagnostics via `diagnose_reproducibility()` (with `print()` and `summary()` methods) supporting both `verify_capsule()` and `diff_capsules()` outputs. Classifies root causes (`hmac_signature_failure`, `manifest_tampering`, `execution_failure` with `stderr` clue parsing, `input_drift`, `script_drift`, `missing_output`, `line_ending_drift` detecting exact `CRLF` vs. `LF` equivalence, `schema_drift`, `binary_metadata_drift`, `monte_carlo_small_drift`, `unseeded_large_divergence`, `rng_drift`, `environment_or_arch_drift`, `unexpected_extra_artifacts`, `container_drift`, and `git_revision_drift`) into a severity-ranked tibble with actionable remediation steps.
+- Added zero-dependency ecosystem handoff hooks:
+  - `as_apptainer_spec()` exports a structured, plain-list-convertible Apptainer descriptor (`rcapsule_apptainer_spec`) containing pinned base image, `%environment` variables, HPC bind mount paths, `%runscript`/`%test` commands, and `.def` `SHA-256` digest for downstream HPC orchestrators.
+  - `verify_with_script()` executes arbitrary external or project-local `.R` audit/verification scripts inside `rcapsule`'s path-confined, ambient-secret-scrubbed isolated sandbox, returning exit status, duration, `stdout`/`stderr`, scrubbed env vars, created/modified artifact `SHA-256` digests, and expected-output checks.
+
+## Latent Bug Fixes & Coverage Hardening (`covr`)
+
+- Fixed a false-positive equality bug in `compare_r_objects()` and `compare_data_frames()` where `factor` vs. `integer` (both sharing `typeof() == "integer"`) or `character` vs. `numeric` columns could silently compare equal after character coercion.
+- Fixed a silent comparison gap in `compare_r_objects()` for lists containing duplicate or partially empty names, switching to exact positional comparison so duplicate/unnamed elements are never skipped.
+- Fixed a macOS symlinked-root (`/var` -> `/private/var`) false security rejection in `assert_confined_path(..., must_exist = TRUE)` on non-existent confined absolute paths, and hardened parent-directory walks against dangling external symlinks (preventing uncaught `fs::dir_exists()` `ENOENT` errors).
+- Enhanced `compare_artifacts()` and `diff_capsules()` to detect `CRLF` vs. `LF` line-ending-only diffs and populate diagnostic numeric/structural drift details even under exact zero-tolerance checks.
+- Added a fifth executable vignette (`vignettes/sbom-and-supply-chain.Rmd`) and lifted overall test coverage past 93% via `covr`.
+
 # rcapsule 0.3.0
 
 ## New Features & Real-World Hardening
