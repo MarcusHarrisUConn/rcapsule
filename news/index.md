@@ -1,5 +1,188 @@
 # Changelog
 
+## rcapsule 0.5.0
+
+### Security Hardening & Independent Peer Red-Team Remediation
+
+Remediated all 16 confirmed findings (1 critical, 7 high, 6 medium, 2
+low) from an independent peer red-team security, accuracy, and
+cross-package interop audit, with permanent regression coverage in
+`tests/testthat/test-peer-redteam.R`:
+
+- **Eliminated `cli`/`glue` template injection (`CRITICAL-1`)**: Wrapped
+  all dynamic messages across `print.rcapsule_lint()`,
+  `print.rcapsule_verification()`, `print.rcapsule_diagnosis()`,
+  `print.rcapsule_diff()`, `print.rcapsule_integrity()`, and
+  `print.rcapsule_scan()` in single-level `{...}` placeholders so
+  untrusted container specs, `renv.lock` entries, `capsule.json` fields,
+  or diff diagnostics can never execute arbitrary R expressions during
+  printing; also enforced strict version validation in
+  `parse_renv_lock()`.
+- **Sealed sandbox `.Renviron`, `.Rprofile`, `.netrc`, and `HOME`
+  isolation (`HIGH-1`)**: Updated `stage_clean_sandbox()` to exclude
+  `.Renviron`, `.Rprofile`, `.env`, `.env.*`, and `.netrc`; updated
+  `build_sandbox_env()` to bind an isolated temporary `HOME`
+  (`.rcapsule_home`) and neutralize `R_ENVIRON_USER`, `R_ENVIRON`,
+  `R_PROFILE_USER`, `R_PROFILE`, and `NETRC`; passed
+  `user_profile = FALSE`, `system_profile = FALSE`, and
+  `cmdargs = c("--no-environ", "--no-init-file")` to
+  [`callr::rscript()`](https://callr.r-lib.org/reference/rscript.html).
+- **Stripped plaintext Git remote credentials (`HIGH-2`)**: Added
+  `sanitize_git_remote_url()` in `detect_git_info()` to strip embedded
+  HTTP(S) `userinfo@` tokens and SCP passwords before recording
+  `scan$git$remote`, writing `capsule.json`, or exporting archival
+  supplement bundles.
+- **Closed silent false-positive verification gaps in
+  [`compare_artifacts()`](https://marcusharrisphd.com/rcapsule/reference/compare_artifacts.md)
+  (`HIGH-3`)**: Switched `compare_data_frames()` to positional column
+  indexing (catching duplicate CSV/TSV column names), checked
+  [`dim()`](https://rdrr.io/r/base/dim.html)/[`names()`](https://rdrr.io/r/base/names.html)/[`dimnames()`](https://rdrr.io/r/base/dimnames.html)
+  on non-numeric matrices/arrays, compared factor
+  [`levels()`](https://rdrr.io/r/base/levels.html) and
+  [`is.ordered()`](https://rdrr.io/r/base/factor.html), checked
+  `data.frame` `row.names`, `POSIXt` `tzone`, and S3 list `class` when
+  `ignore_attributes = FALSE`, and distinguished empty JSON objects
+  ([`{}`](https://rdrr.io/r/base/Paren.html)) from empty JSON arrays
+  (`[]`).
+- **Closed PCRE `$` trailing-newline bypasses (`HIGH-4`)**: Replaced
+  `^...$` with `\A...\z` plus explicit ASCII control-character rejection
+  across all `R/security.R` validators (including `env_vars` names) and
+  `R/sbom.R` UUID/PURL/timestamp/hash validators.
+- **Hardened `rcapsule` \<-\> HPC orchestrator interop (`HIGH-5`)**:
+  Updated
+  [`as_apptainer_spec()`](https://marcusharrisphd.com/rcapsule/reference/as_apptainer_spec.md)
+  to return class `c("rcapsule_apptainer_spec", "rcapsule")`, expose
+  both `bind_paths`/`binds`, both `def_sha256`/`content_digest`, an
+  always-populated `sif_path`, and `def_path` preservation across all
+  overrides (including `cran_repo`, `quarto_version`, `cmdstan_version`,
+  and optional `output`); aligned
+  [`compile_apptainer()`](https://marcusharrisphd.com/rcapsule/reference/compile_apptainer.md)
+  return fields accordingly.
+- **Hardened Docker verification CLI arguments (`HIGH-6`)**: Validated
+  `docker_image` and `docker_tag` via `validate_docker_image_ref()`,
+  rejected `:` in `sandbox_dir` volume mounts, and added
+  `--network=none`, `--cap-drop=ALL`,
+  `--security-opt=no-new-privileges:true`, and `Rscript --vanilla` in
+  `build_docker_run_args()`.
+- **Fixed higher-order AST scanning crash (`HIGH-7`)**: Guarded
+  `parse_r_code_signals()` with `is.symbol(fn[[1L]])` and recursed into
+  call heads so idioms like `scales::col_numeric("Blues", c(0, 1))(0.5)`
+  parse cleanly and extract the package dependency.
+- **Expanded ambient secret scrubbing (`MEDIUM-1`)**: Extended
+  `secret_env_var_patterns()` to scrub `APIKEY`, `_PASS`, `_PWD`,
+  `DATABASE_URL`, database `_(URL|URI|DSN|PASS|PWD|TOKEN|KEY)` vars,
+  `CONN_STR`, `PGPASSFILE`, `NETRC`, `AUTHORIZATION`, `JWT`,
+  `KUBECONFIG`, `PAT_*`, and `(SSH|HMAC|S3|GROQ|COHERE|...)_KEY`
+  variables.
+- **Hardened Compose volume validation, registry-port pinning, and
+  service-name collision guards (`MEDIUM-2`, `MEDIUM-3`, `MEDIUM-4`)**:
+  Normalized host path slashes and blocked sensitive host mounts (`/`,
+  `/etc`, `/root`, `/proc`, `/sys`, `/dev`, `/var/run`, `/run`,
+  `docker.sock`, `podman.sock`) plus malformed mounts in
+  `validate_compose_volume()` and
+  [`lint_container_spec()`](https://marcusharrisphd.com/rcapsule/reference/lint_container_spec.md);
+  centralized `has_pinned_image_tag_or_digest()` across Dockerfile,
+  Compose, and Apptainer compilers/linters so registry ports
+  (`localhost:5000/img`) cannot bypass pinning; aborted cleanly when
+  `service_name` collides with enabled `worker` or `proxy` companion
+  services.
+- **Hardened Markdown/HTML escaping (`MEDIUM-5`)**: Escaped backticks
+  (`&#96;`) in `sanitize_markdown_cell()` and
+  `sanitize_markdown_inline()` to prevent code-span breakout in
+  certificates and applied `sanitize_markdown_inline()` to
+  `included_files` in `README_REPRODUCE.md`.
+- **Hardened CycloneDX SBOM parsing and validation (`MEDIUM-6`)**:
+  Preserved pip `#egg=` fragments in `parse_requirements_txt()`, handled
+  PEP 508 environment markers, direct URLs, and VCS URLs cleanly in
+  `parse_pypi_spec()`/[`export_sbom()`](https://marcusharrisphd.com/rcapsule/reference/export_sbom.md),
+  and guarded
+  [`validate_sbom()`](https://marcusharrisphd.com/rcapsule/reference/validate_sbom.md)
+  against atomic JSON elements in `hashes` and `dependencies`.
+- **Fixed `renv.lock` atomic entry resilience, secret `.Rprofile`
+  copying, and
+  [`verify_with_script()`](https://marcusharrisphd.com/rcapsule/reference/verify_with_script.md)
+  coercion warning (`LOW-1`, `LOW-2`)**: Guarded `parse_renv_lock()`
+  against atomic entries, skipped `COPY .Rprofile ./` with a warning
+  when `secret_in_rprofile` is detected in
+  [`compile_dockerfile()`](https://marcusharrisphd.com/rcapsule/reference/compile_dockerfile.md),
+  and coerced named character `env_vars` to list before appending
+  `RCAPSULE_AUDIT_ARGS` in
+  [`verify_with_script()`](https://marcusharrisphd.com/rcapsule/reference/verify_with_script.md).
+
+## rcapsule 0.4.0
+
+### New Research-Workflow Capabilities (Zero New Dependencies)
+
+- Added CycloneDX 1.5 Software Bill of Materials (SBOM) generation and
+  validation via
+  [`export_sbom()`](https://marcusharrisphd.com/rcapsule/reference/export_sbom.md)
+  and
+  [`validate_sbom()`](https://marcusharrisphd.com/rcapsule/reference/validate_sbom.md).
+  Enumerates R packages (`pkg:cran/...`, `pkg:github/...`,
+  `pkg:gitlab/...`, `pkg:bitbucket/...`, `pkg:bioconductor/...`) with
+  `renv.lock` MD5 hashes, OS `apt` system libraries
+  (`pkg:deb/debian/...`) linked to the R packages requiring them, Python
+  packages (`pkg:pypi/...`), and compiled scientific toolchains (`R`,
+  `CmdStan`, `Quarto`, `TinyTeX`, `JAGS`, `TMB/RTMB`, `C++`, `Rust`,
+  `Python`, `OpenJDK`), cryptographically binding to `capsule.json`’s
+  `SHA-256` content digest when provided.
+- Added automated reproducibility drift diagnostics via
+  [`diagnose_reproducibility()`](https://marcusharrisphd.com/rcapsule/reference/diagnose_reproducibility.md)
+  (with [`print()`](https://rdrr.io/r/base/print.html) and
+  [`summary()`](https://rdrr.io/r/base/summary.html) methods) supporting
+  both
+  [`verify_capsule()`](https://marcusharrisphd.com/rcapsule/reference/verify_capsule.md)
+  and
+  [`diff_capsules()`](https://marcusharrisphd.com/rcapsule/reference/diff_capsules.md)
+  outputs. Classifies root causes (`hmac_signature_failure`,
+  `manifest_tampering`, `execution_failure` with `stderr` clue parsing,
+  `input_drift`, `script_drift`, `missing_output`, `line_ending_drift`
+  detecting exact `CRLF` vs. `LF` equivalence, `schema_drift`,
+  `binary_metadata_drift`, `monte_carlo_small_drift`,
+  `unseeded_large_divergence`, `rng_drift`, `environment_or_arch_drift`,
+  `unexpected_extra_artifacts`, `container_drift`, and
+  `git_revision_drift`) into a severity-ranked tibble with actionable
+  remediation steps.
+- Added zero-dependency ecosystem handoff hooks:
+  - [`as_apptainer_spec()`](https://marcusharrisphd.com/rcapsule/reference/as_apptainer_spec.md)
+    exports a structured, plain-list-convertible Apptainer descriptor
+    (`rcapsule_apptainer_spec`) containing pinned base image,
+    `%environment` variables, HPC bind mount paths, `%runscript`/`%test`
+    commands, and `.def` `SHA-256` digest for downstream HPC
+    orchestrators.
+  - [`verify_with_script()`](https://marcusharrisphd.com/rcapsule/reference/verify_with_script.md)
+    executes arbitrary external or project-local `.R` audit/verification
+    scripts inside `rcapsule`’s path-confined, ambient-secret-scrubbed
+    isolated sandbox, returning exit status, duration,
+    `stdout`/`stderr`, scrubbed env vars, created/modified artifact
+    `SHA-256` digests, and expected-output checks.
+
+### Latent Bug Fixes & Coverage Hardening (`covr`)
+
+- Fixed a false-positive equality bug in `compare_r_objects()` and
+  `compare_data_frames()` where `factor` vs. `integer` (both sharing
+  `typeof() == "integer"`) or `character` vs. `numeric` columns could
+  silently compare equal after character coercion.
+- Fixed a silent comparison gap in `compare_r_objects()` for lists
+  containing duplicate or partially empty names, switching to exact
+  positional comparison so duplicate/unnamed elements are never skipped.
+- Fixed a macOS symlinked-root (`/var` -\> `/private/var`) false
+  security rejection in `assert_confined_path(..., must_exist = TRUE)`
+  on non-existent confined absolute paths, and hardened parent-directory
+  walks against dangling external symlinks (preventing uncaught
+  [`fs::dir_exists()`](https://fs.r-lib.org/reference/file_access.html)
+  `ENOENT` errors).
+- Enhanced
+  [`compare_artifacts()`](https://marcusharrisphd.com/rcapsule/reference/compare_artifacts.md)
+  and
+  [`diff_capsules()`](https://marcusharrisphd.com/rcapsule/reference/diff_capsules.md)
+  to detect `CRLF` vs. `LF` line-ending-only diffs and populate
+  diagnostic numeric/structural drift details even under exact
+  zero-tolerance checks.
+- Added a fifth executable vignette
+  (`vignettes/sbom-and-supply-chain.Rmd`) and lifted overall test
+  coverage past 93% via `covr`.
+
 ## rcapsule 0.3.0
 
 ### New Features & Real-World Hardening

@@ -92,8 +92,8 @@ packages, OS system dependencies, and scientific toolchains:
 sc <- scan_project(proj_dir)
 sc
 #> 
-#> ── rcapsule Project Scan: rcapsule_vignette_study_1be91d7c0046 ─────────────────
-#> • Path: /tmp/Rtmp8Kk0TL/rcapsule_vignette_study_1be91d7c0046
+#> ── rcapsule Project Scan: rcapsule_vignette_study_1c1295a66f1 ──────────────────
+#> • Path: /tmp/RtmpRCMcT4/rcapsule_vignette_study_1c1295a66f1
 #> • Project type: "analysis" (roles: analysis)
 #> • R version: "4.6.2" | renv.lock: FALSE | DESCRIPTION: FALSE
 #> • Entrypoint: "run.R"
@@ -158,19 +158,19 @@ manifest <- create_capsule_manifest(
 
 manifest
 #> 
-#> ── rcapsule Provenance Manifest (cap_c8c2ec7e5920) ─────────────────────────────
-#> • Schema: "1.0.0" | Created: "2026-11-24T19:32:35Z"
-#> • Project: "rcapsule_vignette_study_1be91d7c0046" (analysis) | Entrypoint:
+#> ── rcapsule Provenance Manifest (cap_74eb8608c956) ─────────────────────────────
+#> • Schema: "1.0.0" | Created: "2026-11-24T21:06:14Z"
+#> • Project: "rcapsule_vignette_study_1c1295a66f1" (analysis) | Entrypoint:
 #> "run.R"
 #> • Git: not a git repository
 #> • Environment: R 4.6.2 | Digest: "528f6e0170b4"
 #> • RNG: seed=2026 | kind=Mersenne-Twister/Inversion/Rejection
 #> • Artifacts: 1 inputs, 1 scripts, 2 containers, 2 outputs
-#> • Integrity: digest="927321c8edc3" | signed=TRUE
+#> • Integrity: digest="41c38ba12fae" | signed=TRUE
 verify_manifest_integrity(file.path(proj_dir, "capsule.json"), key = signing_key)
 #> 
 #> ── rcapsule Manifest Integrity: VALID ──────────────────────────────────────────
-#> • Content digest: OK (927321c8edc3)
+#> • Content digest: OK (41c38ba12fae)
 #> • Signed: TRUE | Signature check: TRUE
 ```
 
@@ -186,9 +186,9 @@ tampered$artifacts$outputs[[1]]$sha256 <- paste(rep("0", 64), collapse = "")
 verify_manifest_integrity(tampered, key = signing_key)
 #> 
 #> ── rcapsule Manifest Integrity: INVALID ────────────────────────────────────────
-#> • Content digest: MISMATCH (1eeb2d0a2bab)
+#> • Content digest: MISMATCH (e1dc00753373)
 #> • Signed: TRUE | Signature check: FALSE
-#> ✖ Content digest mismatch (manifest was modified): recorded=927321c8edc3, computed=1eeb2d0a2bab
+#> ✖ Content digest mismatch (manifest was modified): recorded=41c38ba12fae, computed=e1dc00753373
 #> ✖ HMAC-SHA256 signature verification failed (invalid key or tampered manifest).
 ```
 
@@ -212,8 +212,8 @@ audit_exact <- verify_capsule(
 audit_exact
 #> 
 #> ── rcapsule Verification Audit: VERIFIED (EXACT SHA-256) ───────────────────────
-#> • Capsule: "cap_c8c2ec7e5920" (rcapsule_vignette_study_1be91d7c0046)
-#> • Runner: "sandbox" | Entrypoint: "run.R" | Exit: 0 (0.193s)
+#> • Capsule: "cap_74eb8608c956" (rcapsule_vignette_study_1c1295a66f1)
+#> • Runner: "sandbox" | Entrypoint: "run.R" | Exit: 0 (0.219s)
 #> • Manifest integrity: VALID
 #> • Inputs verified: 1/1
 #> • Scripts verified: 1/1
@@ -242,8 +242,8 @@ audit_tol <- verify_capsule(
 audit_tol
 #> 
 #> ── rcapsule Verification Audit: VERIFIED (WITHIN TOLERANCE) ────────────────────
-#> • Capsule: "cap_c8c2ec7e5920" (rcapsule_vignette_study_1be91d7c0046)
-#> • Runner: "sandbox" | Entrypoint: "run.R" | Exit: 0 (0.192s)
+#> • Capsule: "cap_74eb8608c956" (rcapsule_vignette_study_1c1295a66f1)
+#> • Runner: "sandbox" | Entrypoint: "run.R" | Exit: 0 (0.234s)
 #> • Manifest integrity: VALID
 #> • Inputs verified: 1/1
 #> • Scripts verified: 1/1
@@ -273,24 +273,24 @@ cert
 #> 
 #> ── rcapsule Verification Certificate ───────────────────────────────────────────
 #> • Title: "Reproducibility Verification Certificate:
-#> rcapsule_vignette_study_1be91d7c0046"
+#> rcapsule_vignette_study_1c1295a66f1"
 #> • Verdict: "VERIFIED (EXACT)"
-#> • Markdown: 1959 chars
-#> • HTML: 8893 chars
+#> • Markdown: 1957 chars
+#> • HTML: 8890 chars
 #> • Files:
-#> /tmp/Rtmp8Kk0TL/rcapsule_vignette_study_1be91d7c0046/reproducibility_certificate.md,
-#> /tmp/Rtmp8Kk0TL/rcapsule_vignette_study_1be91d7c0046/reproducibility_certificate.html
+#> /tmp/RtmpRCMcT4/rcapsule_vignette_study_1c1295a66f1/reproducibility_certificate.md,
+#> /tmp/RtmpRCMcT4/rcapsule_vignette_study_1c1295a66f1/reproducibility_certificate.html
 cat(substr(cert$markdown, 1, 900), "...\n")
-#> # Reproducibility Verification Certificate: rcapsule_vignette_study_1be91d7c0046
+#> # Reproducibility Verification Certificate: rcapsule_vignette_study_1c1295a66f1
 #> 
 #> > **Verification Verdict:** **VERIFIED (EXACT)**  
-#> > **Capsule ID:** `cap_c8c2ec7e5920` | **Verified At:** `2026-11-24T19:32:35Z` | **Runner:** `sandbox` (0.193s)
+#> > **Capsule ID:** `cap_74eb8608c956` | **Verified At:** `2026-11-24T21:06:14Z` | **Runner:** `sandbox` (0.219s)
 #> 
 #> ## 1. Provenance & Environment Summary
 #> 
 #> | Field | Recorded Value |
 #> | :--- | :--- |
-#> | Project | `rcapsule_vignette_study_1be91d7c0046` (`analysis`) |
+#> | Project | `rcapsule_vignette_study_1c1295a66f1` (`analysis`) |
 #> | Entrypoint | `run.R` |
 #> | Git Revision | Not a Git repository |
 #> | Manifest R Version | `4.6.2` |
@@ -303,5 +303,5 @@ cat(substr(cert$markdown, 1, 900), "...\n")
 #> | Unexpected Extra Artifacts | 0 file(s) |
 #> | Execution Exit Status | `0` |
 #> 
-#>  ...
+#> ## ...
 ```

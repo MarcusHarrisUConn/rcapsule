@@ -40,9 +40,9 @@ deployment.
 | Pillar | Key Functions | What It Does |
 |:---|:---|:---|
 | **1. Project & Toolchain Scanner** | [`scan_project()`](https://marcusharrisphd.com/rcapsule/reference/scan_project.md), [`sysreqs_db()`](https://marcusharrisphd.com/rcapsule/reference/sysreqs_db.md), [`resolve_sysreqs()`](https://marcusharrisphd.com/rcapsule/reference/resolve_sysreqs.md) | Parses R scripts (`library`, `pacman::p_load`, [`xfun::pkg_attach`](https://rdrr.io/pkg/xfun/man/pkg_attach.html), `box::use`, `::`), Quarto/Rmd chunks, `DESCRIPTION`, `renv.lock` (including non-CRAN remotes), `_targets.R`, `here::here()`, `.Rprofile` hazards, and host architecture to resolve OS `apt` libraries and toolchains (`C++`, `CmdStan`, `TMB`/`RTMB`, `JAGS`, `Rust`, `Java`, `Python`, `Quarto`, `LaTeX`). |
-| **2. Multi-Target Container Compiler & Linter** | [`compile_dockerfile()`](https://marcusharrisphd.com/rcapsule/reference/compile_dockerfile.md), [`compile_compose()`](https://marcusharrisphd.com/rcapsule/reference/compile_compose.md), [`compile_apptainer()`](https://marcusharrisphd.com/rcapsule/reference/compile_apptainer.md), [`lint_container_spec()`](https://marcusharrisphd.com/rcapsule/reference/lint_container_spec.md) | Emits pinned, layer-cached multi-stage Dockerfiles (`platform`, Posit PPM binaries), hardened Shiny + worker + proxy Compose stacks, and HPC Apptainer `.def` recipes; statically audits specs for `:latest` tags, `curl\|sh`, root execution, `network_mode: host`, `docker.sock` mounts, and baked secrets. |
-| **3. Cryptographic Provenance & Cross-Run Diffing** | [`create_capsule_manifest()`](https://marcusharrisphd.com/rcapsule/reference/create_capsule_manifest.md), [`read_capsule_manifest()`](https://marcusharrisphd.com/rcapsule/reference/read_capsule_manifest.md), [`write_capsule_manifest()`](https://marcusharrisphd.com/rcapsule/reference/write_capsule_manifest.md), [`sign_manifest()`](https://marcusharrisphd.com/rcapsule/reference/sign_manifest.md), [`verify_manifest_integrity()`](https://marcusharrisphd.com/rcapsule/reference/verify_manifest_integrity.md), [`diff_capsules()`](https://marcusharrisphd.com/rcapsule/reference/diff_capsules.md) | Generates canonical UTF-8 `capsule.json` (schema v1.0.0) with Git state, environment digest, RNG kind/seed, `SHA-256` hashes, and constant-time `HMAC-SHA256` verification; diffs runs across machines (`Laptop` vs. `HPC`). |
-| **4. Isolated Auditor, Certificates & Bundler** | [`verify_capsule()`](https://marcusharrisphd.com/rcapsule/reference/verify_capsule.md), [`compare_artifacts()`](https://marcusharrisphd.com/rcapsule/reference/compare_artifacts.md), [`render_certificate()`](https://marcusharrisphd.com/rcapsule/reference/render_certificate.md), [`export_capsule_bundle()`](https://marcusharrisphd.com/rcapsule/reference/export_capsule_bundle.md), [`build_capsule()`](https://marcusharrisphd.com/rcapsule/reference/build_capsule.md) | Re-runs pipelines in an isolated local sandbox (scrubbing ambient host credentials and detecting extra artifacts) or Docker container, compares CSV/TSV/JSON/RDS outputs with exact and `atol`/`rtol` comparators, renders CSP-hardened HTML5/Markdown certificates, and packages journal-ready ZIP supplements. |
+| **2. Multi-Target Container Compiler, HPC Handoff & Linter** | [`compile_dockerfile()`](https://marcusharrisphd.com/rcapsule/reference/compile_dockerfile.md), [`compile_compose()`](https://marcusharrisphd.com/rcapsule/reference/compile_compose.md), [`compile_apptainer()`](https://marcusharrisphd.com/rcapsule/reference/compile_apptainer.md), [`as_apptainer_spec()`](https://marcusharrisphd.com/rcapsule/reference/as_apptainer_spec.md), [`lint_container_spec()`](https://marcusharrisphd.com/rcapsule/reference/lint_container_spec.md) | Emits pinned, layer-cached multi-stage Dockerfiles (`platform`, Posit PPM binaries), hardened Shiny + worker + proxy Compose stacks, HPC Apptainer `.def` recipes, and plain-list Apptainer descriptors for HPC orchestrators; statically audits specs for `:latest` tags, `curl\|sh`, root execution, `network_mode: host`, `docker.sock` mounts, and baked secrets. |
+| **3. Cryptographic Provenance, CycloneDX 1.5 SBOM & Diffing** | [`create_capsule_manifest()`](https://marcusharrisphd.com/rcapsule/reference/create_capsule_manifest.md), [`sign_manifest()`](https://marcusharrisphd.com/rcapsule/reference/sign_manifest.md), [`verify_manifest_integrity()`](https://marcusharrisphd.com/rcapsule/reference/verify_manifest_integrity.md), [`diff_capsules()`](https://marcusharrisphd.com/rcapsule/reference/diff_capsules.md), [`export_sbom()`](https://marcusharrisphd.com/rcapsule/reference/export_sbom.md), [`validate_sbom()`](https://marcusharrisphd.com/rcapsule/reference/validate_sbom.md) | Generates canonical UTF-8 `capsule.json` (schema v1.0.0) with Git state, environment digest, RNG kind/seed, `SHA-256` hashes, and constant-time `HMAC-SHA256` verification; exports/validates CycloneDX 1.5 SBOMs (`pkg:cran`, `pkg:github`, `pkg:bioconductor`, `pkg:deb`, `pkg:pypi`, toolchains); diffs runs across machines (`Laptop` vs. `HPC`). |
+| **4. Isolated Auditor, Diagnostics, Certificates & Bundler** | [`verify_capsule()`](https://marcusharrisphd.com/rcapsule/reference/verify_capsule.md), [`verify_with_script()`](https://marcusharrisphd.com/rcapsule/reference/verify_with_script.md), [`compare_artifacts()`](https://marcusharrisphd.com/rcapsule/reference/compare_artifacts.md), [`diagnose_reproducibility()`](https://marcusharrisphd.com/rcapsule/reference/diagnose_reproducibility.md), [`render_certificate()`](https://marcusharrisphd.com/rcapsule/reference/render_certificate.md), [`export_capsule_bundle()`](https://marcusharrisphd.com/rcapsule/reference/export_capsule_bundle.md), [`build_capsule()`](https://marcusharrisphd.com/rcapsule/reference/build_capsule.md) | Re-runs pipelines and external `.R` audit scripts in an isolated local sandbox (scrubbing ambient host credentials and detecting extra artifacts) or Docker container, compares CSV/TSV/JSON/RDS outputs with exact and `atol`/`rtol` comparators, classifies drift root causes with ranked remediations, renders CSP-hardened HTML5/Markdown certificates, and packages journal-ready ZIP supplements. |
 
 ## Installation
 
@@ -76,7 +76,14 @@ bundle <- build_capsule(
 # 2. Compare manifests across runs or machines
 diff_capsules("author_capsule.json", "reviewer_capsule.json")
 
-# 3. Export a zip-slip-safe journal peer-review supplement bundle
+# 3. Export & validate a CycloneDX 1.5 SBOM
+sbom <- export_sbom("path/to/project", manifest = bundle$manifest, output = "sbom.cdx.json")
+validate_sbom(sbom)
+
+# 4. Diagnose any verification failure or cross-machine drift
+diagnose_reproducibility(bundle$verification)
+
+# 5. Export a zip-slip-safe journal peer-review supplement bundle
 export_capsule_bundle(
   path         = "path/to/project",
   output       = "journal_supplement.zip",
@@ -102,6 +109,14 @@ export_capsule_bundle(
 - [`vignette("troubleshooting-reproducibility", package = "rcapsule")`](https://marcusharrisphd.com/rcapsule/articles/troubleshooting-reproducibility.md):
   Monte Carlo `atol`/`rtol` tolerances, `.Rprofile` traps, `targets`
   pipelines, and Apple Silicon vs. `amd64` builds.
+- [`vignette("sbom-and-supply-chain", package = "rcapsule")`](https://marcusharrisphd.com/rcapsule/articles/sbom-and-supply-chain.md):
+  CycloneDX 1.5 SBOMs, automated
+  [`diagnose_reproducibility()`](https://marcusharrisphd.com/rcapsule/reference/diagnose_reproducibility.md),
+  HPC
+  [`as_apptainer_spec()`](https://marcusharrisphd.com/rcapsule/reference/as_apptainer_spec.md),
+  and isolated
+  [`verify_with_script()`](https://marcusharrisphd.com/rcapsule/reference/verify_with_script.md)
+  audits.
 - See
   [ARCHITECTURE.md](https://marcusharrisphd.com/rcapsule/ARCHITECTURE.md)
   and [SECURITY.md](https://marcusharrisphd.com/rcapsule/SECURITY.md)

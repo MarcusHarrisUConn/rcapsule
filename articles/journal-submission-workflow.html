@@ -21,7 +21,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rcapsule</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,7 @@
     <li><a class="dropdown-item" href="../articles/multi-target-containers.html">Multi-Target Containers for Quarto, Shiny, and Bayesian HPC Workflows</a></li>
     <li><a class="dropdown-item" href="../articles/journal-submission-workflow.html">Journal Submission &amp; Peer-Review Reproducibility Workflow</a></li>
     <li><a class="dropdown-item" href="../articles/troubleshooting-reproducibility.html">Troubleshooting Reproducibility: Tolerances, .Rprofile Traps, and Cross-Architecture Builds</a></li>
+    <li><a class="dropdown-item" href="../articles/sbom-and-supply-chain.html">Software Supply Chain (SBOM), Drift Diagnostics, and HPC/Audit Handoffs</a></li>
   </ul>
 </li>
 <li class="nav-item dropdown">
@@ -196,10 +197,10 @@ reproducibility in an isolated sandbox, and render certificates:</p>
 <span></span>
 <span><span class="va">bundle</span></span>
 <span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">──</span> <span style="font-weight: bold;">rcapsule Bundle: rcapsule_journal_study_1c5335966a4f</span> <span style="color: #00BBBB;">────────────────────────</span></span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">──</span> <span style="font-weight: bold;">rcapsule Bundle: rcapsule_journal_study_1c7b7fc20ef3</span> <span style="color: #00BBBB;">────────────────────────</span></span></span>
 <span><span class="co">#&gt; • Project type: <span style="color: #0000BB;">"analysis"</span> | Targets: dockerfile, compose, apptainer</span></span>
 <span><span class="co">#&gt; • Lint status: dockerfile=PASS, compose=PASS, apptainer=PASS</span></span>
-<span><span class="co">#&gt; • Manifest ID: <span style="color: #0000BB;">"cap_ce79c1fc5979"</span> (signed=TRUE)</span></span>
+<span><span class="co">#&gt; • Manifest ID: <span style="color: #0000BB;">"cap_caf34879cc46"</span> (signed=TRUE)</span></span>
 <span><span class="co">#&gt; • Verification: <span style="color: #0000BB;">"verified_exact"</span></span></span>
 <span><span class="co">#&gt; • Certificate: rendered</span></span></code></pre></div>
 </div>
@@ -253,8 +254,8 @@ can simulate the reviewer’s manifest and compare both runs with
 <span><span class="va">diff_report</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">──</span> <span style="font-weight: bold;">rcapsule Manifest Diff: OUTPUTS EQUIVALENT (DRIFT DETECTED)</span> <span style="color: #00BBBB;">─────────────────</span></span></span>
-<span><span class="co">#&gt; • Baseline (A): <span style="color: #0000BB;">"Author (Laptop)"</span> (cap_ce79c1fc5979)</span></span>
-<span><span class="co">#&gt; • Comparison (B): <span style="color: #0000BB;">"Reviewer (Linux HPC)"</span> (cap_88173bb50517)</span></span>
+<span><span class="co">#&gt; • Baseline (A): <span style="color: #0000BB;">"Author (Laptop)"</span> (cap_caf34879cc46)</span></span>
+<span><span class="co">#&gt; • Comparison (B): <span style="color: #0000BB;">"Reviewer (Linux HPC)"</span> (cap_0fb1ed8f32a2)</span></span>
 <span><span class="co">#&gt; • Environment drift: <span style="color: #0000BB;">TRUE</span> (R: 4.6.2 -&gt; 4.6.2; platform: x86_64-pc-linux-gnu -&gt;</span></span>
 <span><span class="co">#&gt; x86_64-pc-linux-gnu)</span></span>
 <span><span class="co">#&gt; • RNG drift: seed=2026 -&gt; 2026</span></span>
@@ -327,10 +328,10 @@ for journal upload or Zenodo archival:</p>
 <span><span class="va">exported</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">──</span> <span style="font-weight: bold;">rcapsule Exported Supplement Bundle (zip)</span> <span style="color: #00BBBB;">───────────────────────────────────</span></span></span>
-<span><span class="co">#&gt; • Destination: <span style="color: #0000BB;">/tmp/Rtmpwl5oYS/clinical_trial_supplement.zip</span></span></span>
-<span><span class="co">#&gt; • Capsule ID: <span style="color: #0000BB;">"cap_ce79c1fc5979"</span></span></span>
+<span><span class="co">#&gt; • Destination: <span style="color: #0000BB;">/tmp/RtmpUp90gs/clinical_trial_supplement.zip</span></span></span>
+<span><span class="co">#&gt; • Capsule ID: <span style="color: #0000BB;">"cap_caf34879cc46"</span></span></span>
 <span><span class="co">#&gt; • Files bundled: 11 (9.7 KiB)</span></span>
-<span><span class="co">#&gt; • Archive SHA-256: <span style="color: #0000BB;">"31cc8cb2e690"</span></span></span>
+<span><span class="co">#&gt; • Archive SHA-256: <span style="color: #0000BB;">"4dd1f6ebcae1"</span></span></span>
 <span><span class="va">exported</span><span class="op">$</span><span class="va">files</span></span>
 <span><span class="co">#&gt;  [1] "analysis.R"               "Apptainer.def"           </span></span>
 <span><span class="co">#&gt;  [3] "capsule_certificate.html" "capsule_certificate.md"  </span></span>

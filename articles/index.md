@@ -11,3 +11,5 @@
 - [Troubleshooting Reproducibility: Tolerances, .Rprofile Traps, and
   Cross-Architecture
   Builds](https://marcusharrisphd.com/rcapsule/articles/troubleshooting-reproducibility.md):
+- [Software Supply Chain (SBOM), Drift Diagnostics, and HPC/Audit
+  Handoffs](https://marcusharrisphd.com/rcapsule/articles/sbom-and-supply-chain.md):

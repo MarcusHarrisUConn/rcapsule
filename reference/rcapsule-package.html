@@ -11,7 +11,7 @@ targets pipelines, and Shiny applications."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">rcapsule</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -26,6 +26,7 @@ targets pipelines, and Shiny applications."></head><body>
     <li><a class="dropdown-item" href="../articles/multi-target-containers.html">Multi-Target Containers for Quarto, Shiny, and Bayesian HPC Workflows</a></li>
     <li><a class="dropdown-item" href="../articles/journal-submission-workflow.html">Journal Submission &amp; Peer-Review Reproducibility Workflow</a></li>
     <li><a class="dropdown-item" href="../articles/troubleshooting-reproducibility.html">Troubleshooting Reproducibility: Tolerances, .Rprofile Traps, and Cross-Architecture Builds</a></li>
+    <li><a class="dropdown-item" href="../articles/sbom-and-supply-chain.html">Software Supply Chain (SBOM), Drift Diagnostics, and HPC/Audit Handoffs</a></li>
   </ul></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-pdfs" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">PDFs</button>
@@ -62,13 +63,16 @@ analysis repositories, Quarto manuscripts, R Markdown reports, R packages,
 
 <ul><li><p><strong>Scan projects</strong>: <code><a href="scan_project.html">scan_project()</a></code>, <code><a href="sysreqs_db.html">sysreqs_db()</a></code>, <code><a href="resolve_sysreqs.html">resolve_sysreqs()</a></code></p></li>
 <li><p><strong>Compile &amp; lint containers</strong>: <code><a href="compile_dockerfile.html">compile_dockerfile()</a></code>,
-<code><a href="compile_compose.html">compile_compose()</a></code>, <code><a href="compile_apptainer.html">compile_apptainer()</a></code>, <code><a href="lint_container_spec.html">lint_container_spec()</a></code></p></li>
-<li><p><strong>Cryptographic manifests &amp; diffing</strong>: <code><a href="create_capsule_manifest.html">create_capsule_manifest()</a></code>,
+<code><a href="compile_compose.html">compile_compose()</a></code>, <code><a href="compile_apptainer.html">compile_apptainer()</a></code>, <code><a href="lint_container_spec.html">lint_container_spec()</a></code>,
+<code><a href="as_apptainer_spec.html">as_apptainer_spec()</a></code></p></li>
+<li><p><strong>Cryptographic manifests, SBOM &amp; diffing</strong>: <code><a href="create_capsule_manifest.html">create_capsule_manifest()</a></code>,
 <code><a href="read_capsule_manifest.html">read_capsule_manifest()</a></code>, <code><a href="write_capsule_manifest.html">write_capsule_manifest()</a></code>, <code><a href="sign_manifest.html">sign_manifest()</a></code>,
-<code><a href="verify_manifest_integrity.html">verify_manifest_integrity()</a></code>, <code><a href="diff_capsules.html">diff_capsules()</a></code></p></li>
-<li><p><strong>Isolated verification &amp; publishing</strong>: <code><a href="verify_capsule.html">verify_capsule()</a></code>,
-<code><a href="compare_artifacts.html">compare_artifacts()</a></code>, <code><a href="render_certificate.html">render_certificate()</a></code>, <code><a href="export_capsule_bundle.html">export_capsule_bundle()</a></code>,
-<code><a href="build_capsule.html">build_capsule()</a></code></p></li>
+<code><a href="verify_manifest_integrity.html">verify_manifest_integrity()</a></code>, <code><a href="diff_capsules.html">diff_capsules()</a></code>, <code><a href="export_sbom.html">export_sbom()</a></code>,
+<code><a href="validate_sbom.html">validate_sbom()</a></code></p></li>
+<li><p><strong>Isolated verification, diagnostics &amp; publishing</strong>: <code><a href="verify_capsule.html">verify_capsule()</a></code>,
+<code><a href="verify_with_script.html">verify_with_script()</a></code>, <code><a href="compare_artifacts.html">compare_artifacts()</a></code>,
+<code><a href="diagnose_reproducibility.html">diagnose_reproducibility()</a></code>, <code><a href="render_certificate.html">render_certificate()</a></code>,
+<code><a href="export_capsule_bundle.html">export_capsule_bundle()</a></code>, <code><a href="build_capsule.html">build_capsule()</a></code></p></li>
 </ul></div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

@@ -9,20 +9,24 @@
 <url><loc>https://marcusharrisphd.com/rcapsule/articles/index.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/articles/journal-submission-workflow.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/articles/multi-target-containers.html</loc></url>
+<url><loc>https://marcusharrisphd.com/rcapsule/articles/sbom-and-supply-chain.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/articles/troubleshooting-reproducibility.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/authors.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/index.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/news/index.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/reference/apptainer_available.html</loc></url>
+<url><loc>https://marcusharrisphd.com/rcapsule/reference/as_apptainer_spec.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/reference/build_capsule.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/reference/compare_artifacts.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/reference/compile_apptainer.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/reference/compile_compose.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/reference/compile_dockerfile.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/reference/create_capsule_manifest.html</loc></url>
+<url><loc>https://marcusharrisphd.com/rcapsule/reference/diagnose_reproducibility.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/reference/diff_capsules.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/reference/docker_available.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/reference/export_capsule_bundle.html</loc></url>
+<url><loc>https://marcusharrisphd.com/rcapsule/reference/export_sbom.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/reference/index.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/reference/lint_container_spec.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/reference/rcapsule-package.html</loc></url>
@@ -32,8 +36,10 @@
 <url><loc>https://marcusharrisphd.com/rcapsule/reference/scan_project.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/reference/sign_manifest.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/reference/sysreqs_db.html</loc></url>
+<url><loc>https://marcusharrisphd.com/rcapsule/reference/validate_sbom.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/reference/verify_capsule.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/reference/verify_manifest_integrity.html</loc></url>
+<url><loc>https://marcusharrisphd.com/rcapsule/reference/verify_with_script.html</loc></url>
 <url><loc>https://marcusharrisphd.com/rcapsule/reference/write_capsule_manifest.html</loc></url>
 </urlset>
 

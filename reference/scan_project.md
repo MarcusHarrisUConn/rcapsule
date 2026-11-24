@@ -70,8 +70,8 @@ writeLines(c("library(stats)", "x <- rnorm(10)"), file.path(tmp, "analysis.R"))
 sc <- scan_project(tmp)
 sc
 #> 
-#> ── rcapsule Project Scan: rcapsule_scan_demo_18fb74c4d459 ──────────────────────
-#> • Path: /tmp/RtmpFZcrpm/rcapsule_scan_demo_18fb74c4d459
+#> ── rcapsule Project Scan: rcapsule_scan_demo_18be22f4fa1e ──────────────────────
+#> • Path: /tmp/Rtmp02i5dl/rcapsule_scan_demo_18be22f4fa1e
 #> • Project type: "analysis" (roles: analysis)
 #> • R version: "4.6.2" | renv.lock: FALSE | DESCRIPTION: FALSE
 #> • Entrypoint: "analysis.R"

@@ -117,9 +117,9 @@ exp <- export_capsule_bundle(tmp, output = zip_out, manifest = m, verification =
 exp
 #> 
 #> ── rcapsule Exported Supplement Bundle (zip) ───────────────────────────────────
-#> • Destination: /tmp/RtmpFZcrpm/rcapsule_export_18fb7bdda9ec_supplement.zip
-#> • Capsule ID: "cap_58bfd3d19d8c"
+#> • Destination: /tmp/Rtmp02i5dl/rcapsule_export_18be155f171a_supplement.zip
+#> • Capsule ID: "cap_d60486e9b145"
 #> • Files bundled: 9 (7.5 KiB)
-#> • Archive SHA-256: "37077c16e8e5"
+#> • Archive SHA-256: "121774341b55"
 unlink(c(tmp, zip_out), recursive = TRUE)
 ```

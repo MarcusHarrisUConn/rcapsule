@@ -24,10 +24,11 @@ architecture hints.
 - [`resolve_sysreqs()`](https://marcusharrisphd.com/rcapsule/reference/resolve_sysreqs.md)
   : Resolve OS System Dependencies for a Set of R Packages
 
-## Multi-Target Container Compilers & Static Linter
+## Multi-Target Container Compilers, HPC Handoff & Linter
 
-Generate and audit pinned, layer-cached Dockerfiles, multi-service
-docker-compose.yml stacks, and HPC-ready Apptainer recipes.
+Generate, export, and audit pinned, layer-cached Dockerfiles,
+multi-service docker-compose.yml stacks, and HPC-ready Apptainer recipes
+and descriptors.
 
 - [`compile_dockerfile()`](https://marcusharrisphd.com/rcapsule/reference/compile_dockerfile.md)
   : Compile a Layer-Cached Multi-Stage Dockerfile
@@ -40,14 +41,18 @@ docker-compose.yml stacks, and HPC-ready Apptainer recipes.
 - [`compile_apptainer()`](https://marcusharrisphd.com/rcapsule/reference/compile_apptainer.md)
   : Compile an HPC-Ready Apptainer / Singularity Definition File
 
+- [`as_apptainer_spec()`](https://marcusharrisphd.com/rcapsule/reference/as_apptainer_spec.md)
+  : Export a Structured Apptainer Recipe Descriptor for HPC
+  Orchestrators
+
 - [`lint_container_spec()`](https://marcusharrisphd.com/rcapsule/reference/lint_container_spec.md)
   : Lint a Container Specification for Reproducibility and Security
   Issues
 
-## Cryptographic Provenance Manifests & Cross-Run Diffing
+## Cryptographic Provenance Manifests, SBOM & Cross-Run Diffing
 
 Create, serialize, sign, verify, and diff tamper-evident capsule.json
-manifests with SHA-256 hashes and keyed HMAC-SHA256 signatures.
+manifests and CycloneDX 1.5 Software Bills of Materials (SBOMs).
 
 - [`create_capsule_manifest()`](https://marcusharrisphd.com/rcapsule/reference/create_capsule_manifest.md)
   :
@@ -73,17 +78,28 @@ manifests with SHA-256 hashes and keyed HMAC-SHA256 signatures.
 - [`diff_capsules()`](https://marcusharrisphd.com/rcapsule/reference/diff_capsules.md)
   : Diff Two Capsule Provenance Manifests Across Runs or Machines
 
-## Reproducibility Verification & Certificates
+- [`export_sbom()`](https://marcusharrisphd.com/rcapsule/reference/export_sbom.md)
+  : Export a CycloneDX 1.5 Software Bill of Materials (SBOM)
 
-Execute pipelines in isolated sandboxes or Docker containers, compare
-outputs with exact and numeric-tolerance comparators, and render
-publication-ready verification certificates.
+- [`validate_sbom()`](https://marcusharrisphd.com/rcapsule/reference/validate_sbom.md)
+  : Validate a CycloneDX 1.5 SBOM Document
+
+## Reproducibility Verification, Diagnostics & Certificates
+
+Execute pipelines and external audit scripts in isolated sandboxes or
+Docker containers, diagnose reproducibility drift with ranked
+remediations, and render publication-ready verification certificates.
 
 - [`verify_capsule()`](https://marcusharrisphd.com/rcapsule/reference/verify_capsule.md)
   : Verify Computational Reproducibility Against a Capsule Manifest
+- [`verify_with_script()`](https://marcusharrisphd.com/rcapsule/reference/verify_with_script.md)
+  : Execute an External Verification or Audit Script Inside the Isolated
+  Sandbox
 - [`compare_artifacts()`](https://marcusharrisphd.com/rcapsule/reference/compare_artifacts.md)
   : Compare Two Output Artifacts with Exact SHA-256 and Numeric
   Tolerance
+- [`diagnose_reproducibility()`](https://marcusharrisphd.com/rcapsule/reference/diagnose_reproducibility.md)
+  : Diagnose Reproducibility Failures and Cross-Run Drift
 - [`render_certificate()`](https://marcusharrisphd.com/rcapsule/reference/render_certificate.md)
   : Render a Journal-Ready Reproducibility Verification Certificate
 

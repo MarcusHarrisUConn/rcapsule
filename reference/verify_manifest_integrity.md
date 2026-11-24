@@ -49,7 +49,7 @@ m <- create_capsule_manifest(tmp, key = "secret")
 verify_manifest_integrity(m, key = "secret")
 #> 
 #> ── rcapsule Manifest Integrity: VALID ──────────────────────────────────────────
-#> • Content digest: OK (2ff109c5eaf7)
+#> • Content digest: OK (263bc4751242)
 #> • Signed: TRUE | Signature check: TRUE
 unlink(tmp, recursive = TRUE)
 ```

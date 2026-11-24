@@ -132,7 +132,7 @@ m <- create_capsule_manifest(tmp, outputs = "out.csv", seed = 42L)
 verify_manifest_integrity(m)
 #> 
 #> ── rcapsule Manifest Integrity: VALID ──────────────────────────────────────────
-#> • Content digest: OK (e42baa54455b)
+#> • Content digest: OK (db72768c9c18)
 #> • Signed: FALSE | Signature check: "not verified"
 unlink(tmp, recursive = TRUE)
 ```

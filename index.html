@@ -25,7 +25,7 @@
 
     <a class="navbar-brand me-2" href="index.html">rcapsule</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -42,6 +42,7 @@
     <li><a class="dropdown-item" href="articles/multi-target-containers.html">Multi-Target Containers for Quarto, Shiny, and Bayesian HPC Workflows</a></li>
     <li><a class="dropdown-item" href="articles/journal-submission-workflow.html">Journal Submission &amp; Peer-Review Reproducibility Workflow</a></li>
     <li><a class="dropdown-item" href="articles/troubleshooting-reproducibility.html">Troubleshooting Reproducibility: Tolerances, .Rprofile Traps, and Cross-Architecture Builds</a></li>
+    <li><a class="dropdown-item" href="articles/sbom-and-supply-chain.html">Software Supply Chain (SBOM), Drift Diagnostics, and HPC/Audit Handoffs</a></li>
   </ul>
 </li>
 <li class="nav-item dropdown">
@@ -115,25 +116,25 @@
 <td align="left">Parses R scripts (<code>library</code>, <code>pacman::p_load</code>, <code><a href="https://rdrr.io/pkg/xfun/man/pkg_attach.html" class="external-link">xfun::pkg_attach</a></code>, <code>box::use</code>, <code>::</code>), Quarto/Rmd chunks, <code>DESCRIPTION</code>, <code>renv.lock</code> (including non-CRAN remotes), <code>_targets.R</code>, <code>here::here()</code>, <code>.Rprofile</code> hazards, and host architecture to resolve OS <code>apt</code> libraries and toolchains (<code>C++</code>, <code>CmdStan</code>, <code>TMB</code>/<code>RTMB</code>, <code>JAGS</code>, <code>Rust</code>, <code>Java</code>, <code>Python</code>, <code>Quarto</code>, <code>LaTeX</code>).</td>
 </tr>
 <tr>
-<td align="left"><strong>2. Multi-Target Container Compiler &amp; Linter</strong></td>
+<td align="left"><strong>2. Multi-Target Container Compiler, HPC Handoff &amp; Linter</strong></td>
 <td align="left">
-<code><a href="reference/compile_dockerfile.html">compile_dockerfile()</a></code>, <code><a href="reference/compile_compose.html">compile_compose()</a></code>, <code><a href="reference/compile_apptainer.html">compile_apptainer()</a></code>, <code><a href="reference/lint_container_spec.html">lint_container_spec()</a></code>
+<code><a href="reference/compile_dockerfile.html">compile_dockerfile()</a></code>, <code><a href="reference/compile_compose.html">compile_compose()</a></code>, <code><a href="reference/compile_apptainer.html">compile_apptainer()</a></code>, <code><a href="reference/as_apptainer_spec.html">as_apptainer_spec()</a></code>, <code><a href="reference/lint_container_spec.html">lint_container_spec()</a></code>
 </td>
-<td align="left">Emits pinned, layer-cached multi-stage Dockerfiles (<code>platform</code>, Posit PPM binaries), hardened Shiny + worker + proxy Compose stacks, and HPC Apptainer <code>.def</code> recipes; statically audits specs for <code>:latest</code> tags, <code>curl\|sh</code>, root execution, <code>network_mode: host</code>, <code>docker.sock</code> mounts, and baked secrets.</td>
+<td align="left">Emits pinned, layer-cached multi-stage Dockerfiles (<code>platform</code>, Posit PPM binaries), hardened Shiny + worker + proxy Compose stacks, HPC Apptainer <code>.def</code> recipes, and plain-list Apptainer descriptors for HPC orchestrators; statically audits specs for <code>:latest</code> tags, <code>curl\|sh</code>, root execution, <code>network_mode: host</code>, <code>docker.sock</code> mounts, and baked secrets.</td>
 </tr>
 <tr>
-<td align="left"><strong>3. Cryptographic Provenance &amp; Cross-Run Diffing</strong></td>
+<td align="left"><strong>3. Cryptographic Provenance, CycloneDX 1.5 SBOM &amp; Diffing</strong></td>
 <td align="left">
-<code><a href="reference/create_capsule_manifest.html">create_capsule_manifest()</a></code>, <code><a href="reference/read_capsule_manifest.html">read_capsule_manifest()</a></code>, <code><a href="reference/write_capsule_manifest.html">write_capsule_manifest()</a></code>, <code><a href="reference/sign_manifest.html">sign_manifest()</a></code>, <code><a href="reference/verify_manifest_integrity.html">verify_manifest_integrity()</a></code>, <code><a href="reference/diff_capsules.html">diff_capsules()</a></code>
+<code><a href="reference/create_capsule_manifest.html">create_capsule_manifest()</a></code>, <code><a href="reference/sign_manifest.html">sign_manifest()</a></code>, <code><a href="reference/verify_manifest_integrity.html">verify_manifest_integrity()</a></code>, <code><a href="reference/diff_capsules.html">diff_capsules()</a></code>, <code><a href="reference/export_sbom.html">export_sbom()</a></code>, <code><a href="reference/validate_sbom.html">validate_sbom()</a></code>
 </td>
-<td align="left">Generates canonical UTF-8 <code>capsule.json</code> (schema v1.0.0) with Git state, environment digest, RNG kind/seed, <code>SHA-256</code> hashes, and constant-time <code>HMAC-SHA256</code> verification; diffs runs across machines (<code>Laptop</code> vs. <code>HPC</code>).</td>
+<td align="left">Generates canonical UTF-8 <code>capsule.json</code> (schema v1.0.0) with Git state, environment digest, RNG kind/seed, <code>SHA-256</code> hashes, and constant-time <code>HMAC-SHA256</code> verification; exports/validates CycloneDX 1.5 SBOMs (<code>pkg:cran</code>, <code>pkg:github</code>, <code>pkg:bioconductor</code>, <code>pkg:deb</code>, <code>pkg:pypi</code>, toolchains); diffs runs across machines (<code>Laptop</code> vs. <code>HPC</code>).</td>
 </tr>
 <tr>
-<td align="left"><strong>4. Isolated Auditor, Certificates &amp; Bundler</strong></td>
+<td align="left"><strong>4. Isolated Auditor, Diagnostics, Certificates &amp; Bundler</strong></td>
 <td align="left">
-<code><a href="reference/verify_capsule.html">verify_capsule()</a></code>, <code><a href="reference/compare_artifacts.html">compare_artifacts()</a></code>, <code><a href="reference/render_certificate.html">render_certificate()</a></code>, <code><a href="reference/export_capsule_bundle.html">export_capsule_bundle()</a></code>, <code><a href="reference/build_capsule.html">build_capsule()</a></code>
+<code><a href="reference/verify_capsule.html">verify_capsule()</a></code>, <code><a href="reference/verify_with_script.html">verify_with_script()</a></code>, <code><a href="reference/compare_artifacts.html">compare_artifacts()</a></code>, <code><a href="reference/diagnose_reproducibility.html">diagnose_reproducibility()</a></code>, <code><a href="reference/render_certificate.html">render_certificate()</a></code>, <code><a href="reference/export_capsule_bundle.html">export_capsule_bundle()</a></code>, <code><a href="reference/build_capsule.html">build_capsule()</a></code>
 </td>
-<td align="left">Re-runs pipelines in an isolated local sandbox (scrubbing ambient host credentials and detecting extra artifacts) or Docker container, compares CSV/TSV/JSON/RDS outputs with exact and <code>atol</code>/<code>rtol</code> comparators, renders CSP-hardened HTML5/Markdown certificates, and packages journal-ready ZIP supplements.</td>
+<td align="left">Re-runs pipelines and external <code>.R</code> audit scripts in an isolated local sandbox (scrubbing ambient host credentials and detecting extra artifacts) or Docker container, compares CSV/TSV/JSON/RDS outputs with exact and <code>atol</code>/<code>rtol</code> comparators, classifies drift root causes with ranked remediations, renders CSP-hardened HTML5/Markdown certificates, and packages journal-ready ZIP supplements.</td>
 </tr>
 </tbody>
 </table>
@@ -169,7 +170,14 @@
 <span><span class="co"># 2. Compare manifests across runs or machines</span></span>
 <span><span class="fu"><a href="reference/diff_capsules.html">diff_capsules</a></span><span class="op">(</span><span class="st">"author_capsule.json"</span>, <span class="st">"reviewer_capsule.json"</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># 3. Export a zip-slip-safe journal peer-review supplement bundle</span></span>
+<span><span class="co"># 3. Export &amp; validate a CycloneDX 1.5 SBOM</span></span>
+<span><span class="va">sbom</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/export_sbom.html">export_sbom</a></span><span class="op">(</span><span class="st">"path/to/project"</span>, manifest <span class="op">=</span> <span class="va">bundle</span><span class="op">$</span><span class="va">manifest</span>, output <span class="op">=</span> <span class="st">"sbom.cdx.json"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="reference/validate_sbom.html">validate_sbom</a></span><span class="op">(</span><span class="va">sbom</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># 4. Diagnose any verification failure or cross-machine drift</span></span>
+<span><span class="fu"><a href="reference/diagnose_reproducibility.html">diagnose_reproducibility</a></span><span class="op">(</span><span class="va">bundle</span><span class="op">$</span><span class="va">verification</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># 5. Export a zip-slip-safe journal peer-review supplement bundle</span></span>
 <span><span class="fu"><a href="reference/export_capsule_bundle.html">export_capsule_bundle</a></span><span class="op">(</span></span>
 <span>  path         <span class="op">=</span> <span class="st">"path/to/project"</span>,</span>
 <span>  output       <span class="op">=</span> <span class="st">"journal_supplement.zip"</span>,</span>
@@ -190,6 +198,8 @@
 <code><a href="articles/journal-submission-workflow.html">vignette("journal-submission-workflow", package = "rcapsule")</a></code>: Signed peer-review capsules, cross-machine <code><a href="reference/diff_capsules.html">diff_capsules()</a></code>, and <code><a href="reference/export_capsule_bundle.html">export_capsule_bundle()</a></code>.</li>
 <li>
 <code><a href="articles/troubleshooting-reproducibility.html">vignette("troubleshooting-reproducibility", package = "rcapsule")</a></code>: Monte Carlo <code>atol</code>/<code>rtol</code> tolerances, <code>.Rprofile</code> traps, <code>targets</code> pipelines, and Apple Silicon vs. <code>amd64</code> builds.</li>
+<li>
+<code><a href="articles/sbom-and-supply-chain.html">vignette("sbom-and-supply-chain", package = "rcapsule")</a></code>: CycloneDX 1.5 SBOMs, automated <code><a href="reference/diagnose_reproducibility.html">diagnose_reproducibility()</a></code>, HPC <code><a href="reference/as_apptainer_spec.html">as_apptainer_spec()</a></code>, and isolated <code><a href="reference/verify_with_script.html">verify_with_script()</a></code> audits.</li>
 <li>See <a href="ARCHITECTURE.html">ARCHITECTURE.md</a> and <a href="SECURITY.html">SECURITY.md</a> for architecture and red-team security details.</li>
 </ul>
 </div>

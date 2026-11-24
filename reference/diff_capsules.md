@@ -85,8 +85,8 @@ d <- diff_capsules(m1, m2, tolerances = list(atol = 1e-3))
 d
 #> 
 #> ── rcapsule Manifest Diff: OUTPUTS EQUIVALENT (DRIFT DETECTED) ─────────────────
-#> • Baseline (A): "cap_58505817ae84" (cap_58505817ae84)
-#> • Comparison (B): "cap_5a907bd54cce" (cap_5a907bd54cce)
+#> • Baseline (A): "cap_1811ec1e0616" (cap_1811ec1e0616)
+#> • Comparison (B): "cap_714bf7869861" (cap_714bf7869861)
 #> • Environment drift: FALSE (R: 4.6.2 -> 4.6.2; platform: x86_64-pc-linux-gnu ->
 #> x86_64-pc-linux-gnu)
 #> • RNG drift: seed=1 -> 1

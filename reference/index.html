@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">rcapsule</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -22,6 +22,7 @@
     <li><a class="dropdown-item" href="../articles/multi-target-containers.html">Multi-Target Containers for Quarto, Shiny, and Bayesian HPC Workflows</a></li>
     <li><a class="dropdown-item" href="../articles/journal-submission-workflow.html">Journal Submission &amp; Peer-Review Reproducibility Workflow</a></li>
     <li><a class="dropdown-item" href="../articles/troubleshooting-reproducibility.html">Troubleshooting Reproducibility: Tolerances, .Rprofile Traps, and Cross-Architecture Builds</a></li>
+    <li><a class="dropdown-item" href="../articles/sbom-and-supply-chain.html">Software Supply Chain (SBOM), Drift Diagnostics, and HPC/Audit Handoffs</a></li>
   </ul></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-pdfs" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">PDFs</button>
@@ -97,9 +98,9 @@
         </dt>
         <dd>Resolve OS System Dependencies for a Set of R Packages</dd>
       </dl></div><div class="section level2">
-      <h2 id="multi-target-container-compilers-static-linter">Multi-Target Container Compilers &amp; Static Linter<a class="anchor" aria-label="anchor" href="#multi-target-container-compilers-static-linter"></a></h2>
+      <h2 id="multi-target-container-compilers-hpc-handoff-linter">Multi-Target Container Compilers, HPC Handoff &amp; Linter<a class="anchor" aria-label="anchor" href="#multi-target-container-compilers-hpc-handoff-linter"></a></h2>
 
-      <div class="section-desc"><p>Generate and audit pinned, layer-cached Dockerfiles, multi-service docker-compose.yml stacks, and HPC-ready Apptainer recipes.</p></div>
+      <div class="section-desc"><p>Generate, export, and audit pinned, layer-cached Dockerfiles, multi-service docker-compose.yml stacks, and HPC-ready Apptainer recipes and descriptors.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -129,14 +130,21 @@
 
         <dt>
 
+          <code><a href="as_apptainer_spec.html">as_apptainer_spec()</a></code>
+
+        </dt>
+        <dd>Export a Structured Apptainer Recipe Descriptor for HPC Orchestrators</dd>
+
+        <dt>
+
           <code><a href="lint_container_spec.html">lint_container_spec()</a></code>
 
         </dt>
         <dd>Lint a Container Specification for Reproducibility and Security Issues</dd>
       </dl></div><div class="section level2">
-      <h2 id="cryptographic-provenance-manifests-cross-run-diffing">Cryptographic Provenance Manifests &amp; Cross-Run Diffing<a class="anchor" aria-label="anchor" href="#cryptographic-provenance-manifests-cross-run-diffing"></a></h2>
+      <h2 id="cryptographic-provenance-manifests-sbom-cross-run-diffing">Cryptographic Provenance Manifests, SBOM &amp; Cross-Run Diffing<a class="anchor" aria-label="anchor" href="#cryptographic-provenance-manifests-sbom-cross-run-diffing"></a></h2>
 
-      <div class="section-desc"><p>Create, serialize, sign, verify, and diff tamper-evident capsule.json manifests with SHA-256 hashes and keyed HMAC-SHA256 signatures.</p></div>
+      <div class="section-desc"><p>Create, serialize, sign, verify, and diff tamper-evident capsule.json manifests and CycloneDX 1.5 Software Bills of Materials (SBOMs).</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -184,10 +192,24 @@
 
         </dt>
         <dd>Diff Two Capsule Provenance Manifests Across Runs or Machines</dd>
-      </dl></div><div class="section level2">
-      <h2 id="reproducibility-verification-certificates">Reproducibility Verification &amp; Certificates<a class="anchor" aria-label="anchor" href="#reproducibility-verification-certificates"></a></h2>
 
-      <div class="section-desc"><p>Execute pipelines in isolated sandboxes or Docker containers, compare outputs with exact and numeric-tolerance comparators, and render publication-ready verification certificates.</p></div>
+        <dt>
+
+          <code><a href="export_sbom.html">export_sbom()</a></code>
+
+        </dt>
+        <dd>Export a CycloneDX 1.5 Software Bill of Materials (SBOM)</dd>
+
+        <dt>
+
+          <code><a href="validate_sbom.html">validate_sbom()</a></code>
+
+        </dt>
+        <dd>Validate a CycloneDX 1.5 SBOM Document</dd>
+      </dl></div><div class="section level2">
+      <h2 id="reproducibility-verification-diagnostics-certificates">Reproducibility Verification, Diagnostics &amp; Certificates<a class="anchor" aria-label="anchor" href="#reproducibility-verification-diagnostics-certificates"></a></h2>
+
+      <div class="section-desc"><p>Execute pipelines and external audit scripts in isolated sandboxes or Docker containers, diagnose reproducibility drift with ranked remediations, and render publication-ready verification certificates.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -203,10 +225,24 @@
 
         <dt>
 
+          <code><a href="verify_with_script.html">verify_with_script()</a></code>
+
+        </dt>
+        <dd>Execute an External Verification or Audit Script Inside the Isolated Sandbox</dd>
+
+        <dt>
+
           <code><a href="compare_artifacts.html">compare_artifacts()</a></code>
 
         </dt>
         <dd>Compare Two Output Artifacts with Exact SHA-256 and Numeric Tolerance</dd>
+
+        <dt>
+
+          <code><a href="diagnose_reproducibility.html">diagnose_reproducibility()</a></code>
+
+        </dt>
+        <dd>Diagnose Reproducibility Failures and Cross-Run Drift</dd>
 
         <dt>
 

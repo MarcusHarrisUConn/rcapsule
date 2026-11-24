@@ -15,19 +15,24 @@ packages, `targets` pipelines, and Shiny applications.
   [`compile_dockerfile()`](https://marcusharrisphd.com/rcapsule/reference/compile_dockerfile.md),
   [`compile_compose()`](https://marcusharrisphd.com/rcapsule/reference/compile_compose.md),
   [`compile_apptainer()`](https://marcusharrisphd.com/rcapsule/reference/compile_apptainer.md),
-  [`lint_container_spec()`](https://marcusharrisphd.com/rcapsule/reference/lint_container_spec.md)
+  [`lint_container_spec()`](https://marcusharrisphd.com/rcapsule/reference/lint_container_spec.md),
+  [`as_apptainer_spec()`](https://marcusharrisphd.com/rcapsule/reference/as_apptainer_spec.md)
 
-- **Cryptographic manifests & diffing**:
+- **Cryptographic manifests, SBOM & diffing**:
   [`create_capsule_manifest()`](https://marcusharrisphd.com/rcapsule/reference/create_capsule_manifest.md),
   [`read_capsule_manifest()`](https://marcusharrisphd.com/rcapsule/reference/read_capsule_manifest.md),
   [`write_capsule_manifest()`](https://marcusharrisphd.com/rcapsule/reference/write_capsule_manifest.md),
   [`sign_manifest()`](https://marcusharrisphd.com/rcapsule/reference/sign_manifest.md),
   [`verify_manifest_integrity()`](https://marcusharrisphd.com/rcapsule/reference/verify_manifest_integrity.md),
-  [`diff_capsules()`](https://marcusharrisphd.com/rcapsule/reference/diff_capsules.md)
+  [`diff_capsules()`](https://marcusharrisphd.com/rcapsule/reference/diff_capsules.md),
+  [`export_sbom()`](https://marcusharrisphd.com/rcapsule/reference/export_sbom.md),
+  [`validate_sbom()`](https://marcusharrisphd.com/rcapsule/reference/validate_sbom.md)
 
-- **Isolated verification & publishing**:
+- **Isolated verification, diagnostics & publishing**:
   [`verify_capsule()`](https://marcusharrisphd.com/rcapsule/reference/verify_capsule.md),
+  [`verify_with_script()`](https://marcusharrisphd.com/rcapsule/reference/verify_with_script.md),
   [`compare_artifacts()`](https://marcusharrisphd.com/rcapsule/reference/compare_artifacts.md),
+  [`diagnose_reproducibility()`](https://marcusharrisphd.com/rcapsule/reference/diagnose_reproducibility.md),
   [`render_certificate()`](https://marcusharrisphd.com/rcapsule/reference/render_certificate.md),
   [`export_capsule_bundle()`](https://marcusharrisphd.com/rcapsule/reference/export_capsule_bundle.md),
   [`build_capsule()`](https://marcusharrisphd.com/rcapsule/reference/build_capsule.md)
